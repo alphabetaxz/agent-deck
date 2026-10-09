@@ -1,3 +1,4 @@
+import {displayCards} from './display-model.mjs';
 const mode=document.body.dataset.mode;
 const $=id=>document.getElementById(id);
 let state=null, stream=null, retry=null, lastSeen=null, wakeLock=null;
@@ -9,11 +10,14 @@ async function api(path,data) {
   const result=await response.json();if(!response.ok){const e=new Error(result.error??'操作失败');e.status=response.status;throw e;}return result;
 }
 function button(text,action,className='secondary') {const b=el('button',text,className);b.type='button';b.addEventListener('click',async()=>{b.disabled=true;try{await action();notice('');}catch(e){notice(e.message);}finally{b.disabled=false;}});return b;}
-function renderCards(cards) {
+function renderCards(rawCards) {
+  const cards=displayCards(rawCards,state.displayPlugins??[]);
   const container=$('cards');container.replaceChildren();
   if (!cards.length) {container.append(el('div',mode==='admin'?'启用插件后，卡片会显示在这里。Agent 会话需要先配置接入。':'暂无显示内容，请在 Mac 端启用插件并选择卡片。','empty'));return;}
   for (const c of cards) {
-    const card=el('article',null,'card');card.append(el('div',c.subtitle??c.pluginId,'card-subtitle'));
+    const card=el('article',null,'card');
+    if(c.type==='agent-summary'){card.classList.add('agent-overview');const head=el('div',null,'card-top');head.append(el('h3','Agent'),el('span',statuses[c.status],`status ${c.status}`));card.append(head);const list=el('div',null,'agent-states');for(const tool of c.tools){const row=el('div',null,'agent-state');row.append(el('span',tool.name),el('span',statuses[tool.status],`status ${tool.status}`));list.append(row);}card.append(list);container.append(card);continue;}
+    card.append(el('div',c.subtitle??c.pluginId,'card-subtitle'));
     const head=el('div',null,'card-top');head.append(el('h3',c.title));
     if(c.type==='status')head.append(el('span',statuses[c.status],`status ${c.status}`));card.append(head);
     if(c.pluginStatus!=='running')card.append(el('p','插件暂不可用 · 以下为最后数据'));
@@ -27,7 +31,13 @@ function renderCards(cards) {
     }
     const time=el('time',new Date(c.updatedAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})+' 更新');time.dateTime=new Date(c.updatedAt).toISOString();card.append(time);container.append(card);
   }
+  fitDisplay();
 }
+function fitDisplay(){
+ const container=$('cards');if(!container)return;if(mode==='display')document.body.style.height=(window.visualViewport?.height??window.innerHeight)+'px';const count=container.children.length||1;const columns=container.clientWidth>=600&&count>1?2:1;container.style.gridTemplateColumns=`repeat(${columns},minmax(0,1fr))`;container.style.gridTemplateRows=`repeat(${Math.ceil(count/columns)},minmax(0,1fr))`;
+ for(const card of container.children){const list=card.querySelector('.checklist');if(!list)continue;let more=card.querySelector('.list-more');if(!more){more=el('small',null,'list-more');card.insertBefore(more,card.querySelector('time'));}more.hidden=true;const items=[...list.children];for(const item of items)item.hidden=false;const rowHeight=32;const available=Math.max(0,card.clientHeight-list.offsetTop-36);const visible=Math.max(0,Math.floor(available/rowHeight));for(let i=visible;i<items.length;i++)items[i].hidden=true;if(visible<items.length){more.textContent='还有 '+(items.length-visible)+' 项';more.hidden=false;}}
+}
+window.addEventListener('resize',fitDisplay);
 const todoAction=(action,params)=>api('/api/actions',{pluginId:'todo',action,params});
 let todoFingerprint='';
 function renderTodos() {

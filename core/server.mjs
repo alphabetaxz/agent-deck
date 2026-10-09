@@ -37,7 +37,7 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
   const hostPlugins=new PluginHost(join(root,'plugins'),store,()=>{if (!closing) publish();});
   const displaySnapshot=(device)=> {
     const hidden=layouts[device?.id??'preview']?.hidden??[];
-    return {apiVersion:1,sequence,serverTime:Date.now(),cards:hostPlugins.cards().filter(c=>!hidden.includes(c.pluginId)),layout:layouts[device?.id??'preview']??{hidden:[]}};
+    return {apiVersion:1,sequence,serverTime:Date.now(),cards:hostPlugins.cards().filter(c=>!hidden.includes(c.pluginId)),displayPlugins:hostPlugins.describe().filter(p=>p.enabled&&!hidden.includes(p.id)).map(p=>({id:p.id,name:p.name,status:p.status})),layout:layouts[device?.id??'preview']??{hidden:[]}};
   };
   const adminSnapshot=()=>({...displaySnapshot(null),allCards:hostPlugins.cards(),integrations:integrations.status(),network:networkStatus(),plugins:hostPlugins.describe(),devices:devices.map(({credential,...d})=>d),layouts,connection:{host,port:server.address()?.port??port,tls,lan:!['127.0.0.1','::1','localhost'].includes(host)}});
   function publish() {
@@ -65,7 +65,7 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
     res.setHeader('Cache-Control','no-store');
     try {
       const url=new URL(req.url,'http://localhost'), path=url.pathname;
-      if(deviceOnly&&!['/','/display','/app.js','/style.css','/api/pair','/api/snapshot','/api/events'].includes(path))return json(res,403,{error:'此端口仅用于手机显示'});
+      if(deviceOnly&&!['/','/display','/display-model.mjs','/app.js','/style.css','/api/pair','/api/snapshot','/api/events'].includes(path))return json(res,403,{error:'此端口仅用于手机显示'});
       if (path==='/admin/login' && req.method==='GET') {
         if (!equal(url.searchParams.get('code'),login)) return json(res,401,{error:'登录链接已失效，请重新启动 Mac App'});
         login=token();runtime.adminURL=base+'/admin/login?code='+login;
@@ -151,11 +151,11 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
         }
         return json(res,404,{error:'Unknown endpoint'});
       }
-      const files={'/':'display.html','/display':'display.html','/admin':'admin.html','/app.js':'app.js','/style.css':'style.css'};
+      const files={'/':'display.html','/display':'display.html','/admin':'admin.html','/display-model.mjs':'display-model.mjs','/app.js':'app.js','/style.css':'style.css'};
       if (req.method!=='GET' || !files[path]) return json(res,404,{error:'Not found'});
       if (path==='/admin'&&!isAdmin) return json(res,401,{error:'请通过 Mac App 或启动时的管理链接打开'});
       const content=readFileSync(join(root,'web',files[path]));
-      const ext=files[path].split('.').pop();res.writeHead(200,{'Content-Type':({html:'text/html',js:'text/javascript',css:'text/css'})[ext]+'; charset=utf-8'});res.end(content);
+      const ext=files[path].split('.').pop();res.writeHead(200,{'Content-Type':({html:'text/html',js:'text/javascript',mjs:'text/javascript',css:'text/css'})[ext]+'; charset=utf-8'});res.end(content);
     } catch (e) { if (!res.headersSent) json(res,e.status??400,{error:e.message});else res.end(); }
   }
   const server=tls?https.createServer({cert:readFileSync(cert),key:readFileSync(key)},handle):http.createServer(handle);
