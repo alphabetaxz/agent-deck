@@ -74,8 +74,8 @@ export function restoreFeature(text,patch) {
 }
 
 export class IntegrationManager {
-  constructor({root,dataDir,home=homedir(),env=process.env,probe}) {
-    this.root=root;this.dataDir=resolve(dataDir);this.home=home;this.env=env;
+  constructor({root,dataDir,home=homedir(),env=process.env,probe,desktop}) {
+    this.desktop=desktop;this.root=root;this.dataDir=resolve(dataDir);this.home=home;this.env=env;
     this.directory=join(this.dataDir,'integrations');this.observed=new Map();this.tools=new Map();
     this.probe=probe??(source=>this.detect(source));
     this.paths={claude:join(env.CLAUDE_CONFIG_DIR??join(home,'.claude'),'settings.json'),codex:join(env.CODEX_HOME??join(home,'.codex'),'hooks.json'),pi:join(env.PI_CODING_AGENT_DIR??join(home,'.pi','agent'),'extensions','agent-deck.ts')};
@@ -100,6 +100,7 @@ export class IntegrationManager {
     }catch{return {available:false,found:true,binary,reason:'工具无法启动，请检查或重新安装该工具'};}
   }
   async refresh() {
+    await this.desktop?.refresh();
     if(!this.refreshing)this.refreshing=Promise.all(Object.keys(names).map(async source=>this.tools.set(source,await this.probe(source)))).finally(()=>this.refreshing=null);
     await this.refreshing;return this.status();
   }
@@ -127,7 +128,7 @@ export class IntegrationManager {
       return {source,name:names[source],...tool,installed:installed&&!needsRepair,hasConfig,needsRepair,error,lastEventAt,
         state:error?'error':!tool.available?(tool.found?'unavailable':'missing'):needsRepair?'repair':installed?(lastEventAt?'connected':'configured'):'unconfigured',
         configPath:this.paths[source],message:installed?(source==='codex'&&!lastEventAt?'配置已安装；首次使用时请在 Codex 中确认 Hook 信任':'已安装接入；正常打开新会话即可上报状态'):tool.reason??'点击一键接入，自动保存配置'};
-    });
+    }).concat(this.desktop?[this.desktop.status()]:[]);
   }
   recordEvent(source){if(names[source])this.observed.set(source,Date.now());}
   writeChanges(changes,source) {
@@ -150,6 +151,7 @@ export class IntegrationManager {
     }
   }
   async change(source,action) {
+    if(source==='codex-desktop'&&this.desktop)return this.desktop.change(action);
     if(!names[source]||!['install','remove'].includes(action))throw new Error('未知接入操作');
     mkdirSync(this.directory,{recursive:true,mode:0o700});
     const lock=join(this.directory,'install.lock');let fd;

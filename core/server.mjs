@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { networkInterfaces } from 'node:os';
 import { PluginHost } from './plugins.mjs';
+import { CodexDesktopObserver } from './codex-desktop.mjs';
 import { IntegrationManager } from './integrations.mjs';
 import { Store } from './store.mjs';
 import { MAX_MESSAGE_BYTES } from './protocol.mjs';
@@ -30,7 +31,8 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
   const streams=new Set(), pairAttempts=new Map();
   let devices=store.get('core','devices',[]);
   let layouts=store.get('core','layouts',{});
-  const integrations=new IntegrationManager({root,dataDir,...integrationOptions});
+  const desktop=new CodexDesktopObserver({store,home:integrationOptions.home,env:integrationOptions.env,appPaths:integrationOptions.appPaths,onStatus:()=>{if(!closing)publish();},isReady:()=>hostPlugins.get('agents').status==='running',onEvent:async event=>{await hostPlugins.request('agents','event',event);publish();},onRemove:async()=>{if(hostPlugins.get('agents').status==='running')await hostPlugins.request('agents','action',{action:'clearDesktop'});else{const state=store.get('agents','state',{sessions:{}});for(const [id,session] of Object.entries(state.sessions??{}))if(session.client==='desktop')delete state.sessions[id];store.set('agents','state',state);}}});
+  const integrations=new IntegrationManager({root,dataDir,...integrationOptions,desktop});
   await integrations.refresh();
   const hostPlugins=new PluginHost(join(root,'plugins'),store,()=>{if (!closing) publish();});
   const displaySnapshot=(device)=> {
@@ -108,6 +110,7 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
         const data=await body(req);
         if (path==='/api/integrations' && req.method==='POST') {
           if (!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) return json(res,403,{error:'请在本机 App 管理接入'});
+          if(data.source==='codex-desktop'&&data.action==='install')await hostPlugins.configure('agents',{enabled:true});
           await integrations.change(data.source,data.action);
           if(data.action==='install')await hostPlugins.configure('agents',{enabled:true});
           publish();return json(res,200,{ok:true});
@@ -162,10 +165,10 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
   const base=`${tls?'https':'http'}://${localHost}:${server.address().port}`;
   const runtime={pid:process.pid,baseURL:base,adminURL:base+'/admin/login?code='+login,hookToken,hookURL:base+'/api/hooks'};
   const runtimePath=join(dataDir,'runtime.json');writeFileSync(runtimePath,JSON.stringify(runtime),{mode:0o600});chmodSync(runtimePath,0o600);
-  hostPlugins.start();
+  hostPlugins.start();desktop.start();
   if(store.get('core','deviceNetworkEnabled',false)){
     const next=tls?https.createServer({cert:readFileSync(cert),key:readFileSync(key)},(req,res)=>handle(req,res,true)):http.createServer((req,res)=>handle(req,res,true));
     try{await new Promise((resolve,reject)=>{next.once('error',reject);next.listen(devicePort,'0.0.0.0',resolve);});deviceServer=next;}catch{store.set('core','deviceNetworkEnabled',false);}
   }
-  return {server,store,integrations,plugins:hostPlugins,runtime,publish,async close(){closing=true;for(const s of streams)s.res.end();await hostPlugins.close();if(deviceServer){deviceServer.closeAllConnections();await new Promise(resolve=>deviceServer.close(resolve));}await new Promise(resolve=>server.close(resolve));store.close();}};
+  return {server,store,integrations,desktop,plugins:hostPlugins,runtime,publish,async close(){closing=true;await desktop.close();for(const s of streams)s.res.end();await hostPlugins.close();if(deviceServer){deviceServer.closeAllConnections();await new Promise(resolve=>deviceServer.close(resolve));}await new Promise(resolve=>server.close(resolve));store.close();}};
 }
