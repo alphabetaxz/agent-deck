@@ -3,6 +3,32 @@ import AppKit
 import WebKit
 
 @MainActor
+private enum DeckIcons {
+    static let menuBar: NSImage = {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+            func diamond(_ radius: CGFloat) -> NSBezierPath {
+                let path = NSBezierPath()
+                path.move(to: NSPoint(x: 9, y: 9 + radius))
+                path.line(to: NSPoint(x: 9 + radius, y: 9))
+                path.line(to: NSPoint(x: 9, y: 9 - radius))
+                path.line(to: NSPoint(x: 9 - radius, y: 9))
+                path.close()
+                return path
+            }
+            NSColor.black.setFill()
+            let ring = diamond(8)
+            ring.append(diamond(5.85))
+            ring.windingRule = .evenOdd
+            ring.fill()
+            diamond(3.6).fill()
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }()
+}
+
+@MainActor
 final class DeckService: ObservableObject {
     @Published var url: URL?
     @Published var error: String?
@@ -126,9 +152,12 @@ struct AgentDeckApp: App {
             .frame(minWidth: 920, minHeight: 680)
             .onAppear { delegate.service = service; service.applyIcon(); service.start(); NSApplication.shared.setActivationPolicy(.regular); NSApplication.shared.activate(ignoringOtherApps: true) }
         }
-        MenuBarExtra("Agent Deck", systemImage: "rectangle.grid.1x2") {
+        MenuBarExtra {
             Button("打开管理窗口") { NSApplication.shared.activate(ignoringOtherApps: true); NSApplication.shared.windows.first?.makeKeyAndOrderFront(nil) }
             Button("退出") { NSApplication.shared.terminate(nil) }
+        } label: {
+            Image(nsImage: DeckIcons.menuBar)
+                .accessibilityLabel("Agent Deck")
         }
     }
 }
