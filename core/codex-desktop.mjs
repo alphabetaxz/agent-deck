@@ -12,12 +12,12 @@ export function desktopEvent(row,session,turnId){
   if(p.type==='task_complete')return {...base,hook_event_name:'Stop',last_assistant_message:'本轮桌面任务已完成'};
   if(p.type==='turn_aborted')return {...base,hook_event_name:'Interrupt'};
   if(p.type==='error')return {...base,hook_event_name:'StopFailure',error:'桌面任务报告异常'};
-  if(['exec_approval_request','apply_patch_approval_request','request_user_input'].includes(p.type))return {...base,hook_event_name:'PermissionRequest',message:'请在 Codex 桌面版处理'};
+  if(['exec_approval_request','apply_patch_approval_request','request_user_input'].includes(p.type))return {...base,hook_event_name:'PermissionRequest',message:'请在 Codex处理'};
   if(p.type==='token_count')return {...base,hook_event_name:'Heartbeat'};
  }
  if(row.type==='response_item'){
   if(['function_call','custom_tool_call'].includes(p.type)){
-   if(/(^|\.)request_user_input$/.test(p.name??''))return {...base,hook_event_name:'PermissionRequest',message:'请在 Codex 桌面版回答问题'};
+   if(/(^|\.)request_user_input$/.test(p.name??''))return {...base,hook_event_name:'PermissionRequest',message:'请在 Codex回答问题'};
    return {...base,hook_event_name:'PreToolUse',tool_name:'桌面工具'};
   }
   if(['function_call_output','custom_tool_call_output'].includes(p.type))return {...base,hook_event_name:'PostToolUse'};
@@ -30,9 +30,9 @@ export class CodexDesktopObserver {
  }
  databasePath(){try{return readdirSync(this.home).filter(n=>/^state_\d+\.sqlite$/.test(n)).sort((a,b)=>Number(b.match(/\d+/)[0])-Number(a.match(/\d+/)[0])).map(n=>join(this.home,n))[0];}catch{return null;}}
  async refresh(){this.available=this.appPaths.some(p=>existsSync(p))&&!!this.databasePath();return this.status();}
- status(){return {source:'codex-desktop',name:'Codex 桌面版',available:this.available,found:this.appPaths.some(p=>existsSync(p)),installed:this.enabled,hasConfig:this.enabled,needsRepair:false,error:this.error,lastEventAt:this.lastEventAt,state:this.error?'error':!this.available?'missing':this.enabled?(this.lastEventAt?'connected':'configured'):'unconfigured',message:!this.available?(this.appPaths.some(p=>existsSync(p))?'未发现本机会话记录，请先在 Codex 桌面版创建本地会话':'未检测到 Codex 桌面版'):this.enabled?'只读接入已开启；工作、完成和中断会自动显示，部分审批状态可能不可见':'自动读取本机桌面会话状态，无需安装 CLI 或修改 Codex 配置'};}
+ status(){return {source:'codex-desktop',name:'Codex',available:this.available,found:this.appPaths.some(p=>existsSync(p)),installed:this.enabled,hasConfig:this.enabled,needsRepair:false,error:this.error,lastEventAt:this.lastEventAt,state:this.error?'error':!this.available?'missing':this.enabled?(this.lastEventAt?'connected':'configured'):'unconfigured',message:!this.available?(this.appPaths.some(p=>existsSync(p))?'未发现本机会话记录，请先在 Codex创建本地会话':'未检测到 Codex'):this.enabled?'只读接入已开启；工作、完成和中断会自动显示，部分审批状态可能不可见':'自动读取本机桌面会话状态，无需安装 CLI 或修改 Codex 配置'};}
  async change(action){
-  if(!['install','remove'].includes(action))throw new Error('未知接入操作');await this.refresh();if(action==='install'&&!this.available)throw new Error('未检测到 Codex 桌面版或本机会话记录，请先打开桌面版创建本地会话');
+  if(!['install','remove'].includes(action))throw new Error('未知接入操作');await this.refresh();if(action==='install'&&!this.available)throw new Error('未检测到 Codex或本机会话记录，请先打开桌面版创建本地会话');
   this.enabled=action==='install';this.store.set('core','codexDesktopEnabled',this.enabled);
   if(!this.enabled){await this.pending;if(this.onRemove)await this.onRemove();else for(const file of this.files.values())if(file.session)await this.onEvent({source:'codex',client:'desktop',session_id:file.session.id,cwd:file.session.cwd,hook_event_name:'SessionEnd',timestamp:Date.now()});this.files.clear();this.lastEventAt=null;this.error=null;}else await this.tick();
   return this.status();

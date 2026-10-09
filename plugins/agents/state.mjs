@@ -35,6 +35,6 @@ export function agentCards(sessions,now=Date.now()) {
   return Object.values(sessions).filter(s=>!s.ended).sort((a,b)=>(b.status==='waiting')-(a.status==='waiting')||b.updatedAt-a.updatedAt).map(s=> {
     // Without a process monitor, quiet Claude/Codex sessions have uncertain liveness.
     const stale=now-s.lastSeen>(s.source==='pi'?45000:300000);
-    return {id:s.id,type:'status',title:s.title,subtitle:s.client==='desktop'?'Codex 桌面版':s.source==='claude'?'Claude Code':s.source==='codex'?'Codex':'pi',status:stale?'unknown':s.status,summary:stale?'暂未收到新事件；存活状态待确认':s.summary,updatedAt:s.updatedAt};
+    return {id:s.id,type:'status',title:s.title,subtitle:s.client==='desktop'?'Codex':s.source==='claude'?'Claude Code':s.source==='codex'?'Codex':'pi',status:stale?'unknown':s.status,summary:stale?'暂未收到新事件；存活状态待确认':s.summary,updatedAt:s.updatedAt};
   });
 }
