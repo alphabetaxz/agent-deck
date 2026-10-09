@@ -16,6 +16,11 @@ final class DeckService: ObservableObject {
     }()
     let data = (ProcessInfo.processInfo.environment["AGENT_DECK_DATA"] ?? Bundle.main.object(forInfoDictionaryKey: "AgentDeckDataDirectory") as? String).map { URL(fileURLWithPath: $0) } ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("AgentDeck")
 
+    func applyIcon() {
+        let icon = Bundle.main.url(forResource: "AgentDeck", withExtension: "icns") ?? root.appendingPathComponent("assets/AgentDeck.icns")
+        if let image = NSImage(contentsOf: icon) { NSApplication.shared.applicationIconImage = image }
+    }
+
     func start() {
         guard process == nil, url == nil, !starting else { return }
         starting = true
@@ -119,7 +124,7 @@ struct AgentDeckApp: App {
                 else { ProgressView("正在启动 Agent Deck…") }
             }
             .frame(minWidth: 920, minHeight: 680)
-            .onAppear { delegate.service = service; service.start(); NSApplication.shared.setActivationPolicy(.regular); NSApplication.shared.activate(ignoringOtherApps: true) }
+            .onAppear { delegate.service = service; service.applyIcon(); service.start(); NSApplication.shared.setActivationPolicy(.regular); NSApplication.shared.activate(ignoringOtherApps: true) }
         }
         MenuBarExtra("Agent Deck", systemImage: "rectangle.grid.1x2") {
             Button("打开管理窗口") { NSApplication.shared.activate(ignoringOtherApps: true); NSApplication.shared.windows.first?.makeKeyAndOrderFront(nil) }
