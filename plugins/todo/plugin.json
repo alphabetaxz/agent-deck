@@ -1,0 +1,5 @@
+{
+  "id":"todo", "name":"今日待办", "version":"0.1.0", "apiVersion":1,
+  "entrypoint":"index.mjs", "cardTypes":["list"], "permissions":["storage"],
+  "defaults":{}, "configSchema":{}
+}
