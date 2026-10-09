@@ -95,3 +95,11 @@ swift build
 ```
 
 只在测试中使用模拟事件，运行界面不会将其伪装为真实数据。提交前应完成协议、状态转换和设备访问控制测试。持续运行一整天和真实 Android 检查留到有设备参与的验证阶段。
+
+## GitHub 自动构建
+
+每次 push、Pull Request，以及手动触发 `Build macOS App` 都会执行测试，并分别在 Apple Silicon 和 Intel runner 构建 Release App。打开仓库的 **Actions → Build macOS App → 对应运行 → Artifacts**，下载相应架构的压缩包，解压即可获得 `Agent Deck.app`。产物保留 14 天。
+
+CI 包内置 Node.js 24.5.0 和生产依赖，不包含构建机器路径或用户数据；数据保存在 `~/Library/Application Support/AgentDeck`。本地可用 `AGENT_DECK_NODE=/path/to/standalone/node zsh scripts/package-app.sh` 构建同样的包。需要官方独立 Node 安装中的 LICENSE；Homebrew 外部动态库依赖不会被带入安装包。
+
+当前为 ad-hoc 签名的预览构建，尚未配置 Developer ID 签名和 Apple 公证。GitHub Actions 不会自动发布 Release。

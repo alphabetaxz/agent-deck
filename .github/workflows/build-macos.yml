@@ -1,0 +1,50 @@
+name: Build macOS App
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: macOS ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.5.0'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Test
+        run: npm test
+      - name: Build standalone App
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '14.0'
+        run: zsh scripts/package-app.sh
+      - name: Verify bundled runtime and plugins
+        run: '"dist/Agent Deck.app/Contents/Resources/runtime/node" scripts/verify-app.mjs'
+      - name: Upload App
+        uses: actions/upload-artifact@v4
+        with:
+          name: Agent-Deck-macos-${{ matrix.arch }}
+          path: dist/Agent-Deck-macos-${{ matrix.arch }}.zip
+          if-no-files-found: error
+          retention-days: 14

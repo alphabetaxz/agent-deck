@@ -72,7 +72,8 @@ final class DeckService: ObservableObject {
         let task = Process()
         let node = ProcessInfo.processInfo.environment["AGENT_DECK_NODE"] ?? Bundle.main.object(forInfoDictionaryKey: "AgentDeckNodeExecutable") as? String ?? ""
         let pathCandidates = (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":").map { String($0) + "/node" }
-        let candidates = [node, "/opt/homebrew/bin/node", "/usr/local/bin/node"] + pathCandidates
+        let bundledNode = Bundle.main.resourceURL?.appendingPathComponent("runtime/node").path ?? ""
+        let candidates = [node, bundledNode, "/opt/homebrew/bin/node", "/usr/local/bin/node"] + pathCandidates
         guard let executable = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { error = "未找到 Node.js 24。设置 AGENT_DECK_NODE 为 Node 可执行文件路径后重试。"; return }
         task.executableURL = URL(fileURLWithPath: executable)
         var arguments = [root.appendingPathComponent("core/main.mjs").path, "--data", data.path]
