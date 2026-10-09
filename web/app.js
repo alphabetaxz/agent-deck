@@ -82,6 +82,14 @@ function renderIntegrations() {
     container.append(panel);
   }
 }
+let networkFingerprint='',pairTimer=null;
+function renderNetwork(){
+  const network=state.network;const fingerprint=JSON.stringify(network);if(fingerprint===networkFingerprint)return;networkFingerprint=fingerprint;
+  $('network-toggle').textContent=network.enabled?'关闭手机连接':'开启手机连接';
+  const select=$('network-address'),selected=select.value;select.replaceChildren();for(const item of network.addresses){const option=el('option',item.address+' · '+item.name);option.value=item.address;select.append(option);}if(network.addresses.some(x=>x.address===selected))select.value=selected;
+  $('network-hint').textContent=network.enabled?(network.encrypted?'手机连接已开启 · HTTPS':'手机连接已开启 · 仅在可信局域网使用，HTTP 传输未加密'):'开启后，手机可通过局域网连接；Mac 管理界面仅在本机开放。';
+  $('pair-button').disabled=!network.enabled||!network.addresses.length;
+}
 function renderDevices() {
   const fingerprint=JSON.stringify(state.devices);if(fingerprint!==deviceFingerprint){deviceFingerprint=fingerprint;const container=$('device-list');container.replaceChildren();
     if(!state.devices.length)container.append(el('p','尚未配对手机。你可以先打开本机显示预览。','muted'));
@@ -103,7 +111,7 @@ function render(snapshot) {
   if(mode==='admin'){
     const agents=(state.allCards??state.cards).filter(c=>c.type==='status');const todos=(state.allCards??state.cards).find(c=>c.pluginId==='todo')?.items??[];
     const summary=$('summary');summary.replaceChildren();for(const [label,value] of [['Agent 工作中',agents.filter(c=>c.status==='running').length],['等待你处理',agents.filter(c=>c.status==='waiting').length],['今日待办',`${todos.filter(t=>t.done).length} / ${todos.length}`]]){const box=el('div');box.append(el('span',label),el('b',String(value)));summary.append(box);}
-    renderTodos();renderIntegrations();renderPlugins();renderDevices();
+    renderNetwork();renderTodos();renderIntegrations();renderPlugins();renderDevices();
   } else $('last-update').textContent='最后同步 '+new Date(lastSeen).toLocaleTimeString('zh-CN',{hour12:false});
 }
 async function connect() {
@@ -116,9 +124,14 @@ async function connect() {
 if(mode==='admin') {
   $('integration-refresh').addEventListener('click',async()=>{const b=$('integration-refresh');b.disabled=true;b.textContent='检测中…';try{await api('/api/integrations/refresh',{});}catch(e){notice(e.message);}finally{b.disabled=false;b.textContent='重新检测';}});
   $('todo-form').addEventListener('submit',async e=>{e.preventDefault();const input=$('todo-title');try{await todoAction('add',{title:input.value});input.value='';notice('');}catch(e){notice(e.message);}});
-  $('pair-button').addEventListener('click',async()=>{try{const pair=await api('/api/pair/create',{});const panel=$('pair-info');panel.replaceChildren(el('p','配对码 · 2 分钟有效'),el('strong',pair.code),el('p','在手机浏览器打开：'+pair.url),el('p',pair.lan?'手机与 Mac 应在同一局域网，并信任部署所用证书。':'当前仅运行本机预览。连接真实手机需要启用已配置 TLS 的局域网服务。','muted'));panel.hidden=false;}catch(e){notice(e.message);}});
+  $('network-toggle').addEventListener('click',async()=>{const b=$('network-toggle');b.disabled=true;try{await api('/api/network',{enabled:!state.network.enabled});$('pair-info').hidden=true;}catch(e){notice(e.message);}finally{b.disabled=false;}});
+  $('pair-button').addEventListener('click',async()=>{const b=$('pair-button');b.disabled=true;try{const pair=await api('/api/pair/create',{address:$('network-address').value||undefined});const panel=$('pair-info');panel.replaceChildren();
+    if(!pair.lan){panel.append(el('p','请先开启手机连接，并连接 Wi-Fi 或有线网络。'));}
+    else{const image=document.createElement('img');image.src=pair.qr;image.alt='手机配对二维码';image.width=280;image.height=280;panel.append(image,el('p','手机扫码，确认连接即可 · 2 分钟有效'),el('strong',pair.code),el('p','也可在手机浏览器打开：'+pair.url),el('p','手机和 Mac 需连接同一局域网。','muted'));const expiration=el('p',null,'muted');panel.append(expiration);clearInterval(pairTimer);const tick=()=>{const seconds=Math.ceil((pair.expires-Date.now())/1000);expiration.textContent=seconds>0?'剩余 '+seconds+' 秒':'配对码已过期，请重新生成';if(seconds<=0){image.hidden=true;clearInterval(pairTimer);}};tick();pairTimer=setInterval(tick,1000);}
+    panel.hidden=false;}catch(e){notice(e.message);}finally{b.disabled=false;}});
   $('layout-device').addEventListener('change',renderLayout);
 } else {
+  const code=new URLSearchParams(location.hash.slice(1)).get('pair');if(/^[0-9]{8}$/.test(code??'')){$('pair-code').value=code;history.replaceState(null,'',location.pathname);}
   $('pair-form').addEventListener('submit',async e=>{e.preventDefault();try{await api('/api/pair',{code:$('pair-code').value,name:$('device-name').value});await connect();}catch(e){notice(e.message);}});
   $('fullscreen').addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();else notice('当前浏览器不支持全屏，请使用系统或浏览器的全屏选项。');}catch{notice('无法进入全屏，请检查浏览器设置。');}});
   async function acquireWake(){if(!navigator.wakeLock){notice('当前浏览器无法保持亮屏。请在 Android 设置中调整休眠时间。');return;}try{wakeLock=await navigator.wakeLock.request('screen');$('wake').textContent='亮屏已开启';wakeLock.addEventListener('release',()=>{$('wake').textContent='保持亮屏';});}catch{notice('无法保持亮屏，请检查设备设置。');}}

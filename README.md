@@ -2,14 +2,15 @@
 
 把旧 Android 手机变成桌面状态屏。Mac 管理 Todo、Agent 状态和插件，手机显示你需要关注的信息。
 
-**当前为 v0.1 开发预览，不是完成的发布版。** 独立进程插件、Todo、时钟、Agent 事件桥接和浏览器显示链路已实现。真实 Android 兼容、Codex 桌面会话发现、二维码配对和完整原生管理界面仍待完成。
+**当前为 v0.1 开发预览，不是完成的发布版。** 独立进程插件、Todo、时钟、Agent 事件桥接和浏览器显示链路已实现。真实 Android 兼容、Codex 桌面会话发现、完整原生管理界面仍待完成。
 
 ## 运行
 
-要求：macOS 14+、Node.js 24.5+、Swift 6（构建 Mac App）。核心无第三方 npm 依赖，使用 Node 内置 SQLite；当前 Node 版本会提示该模块为实验性 API。
+要求：macOS 14+、Node.js 24.5+、Swift 6（构建 Mac App）。核心使用 Node 内置 SQLite，二维码生成使用 qrcode；当前 Node 版本会提示该模块为实验性 API。
 
 ```sh
 cd ~/workspace/code/agent-deck
+npm ci
 npm test
 AGENT_DECK_NODE="$(command -v node)" swift run AgentDeck
 ```
@@ -32,15 +33,15 @@ node scripts/open-admin.mjs .data
 
 ## 手机连接
 
-本机预览通过管理界面的「打开显示预览」使用。连接真实手机时，需要为局域网地址配置有效 TLS 证书，并让设备正常信任证书；项目不会禁用证书校验或自动配置系统信任。
+本机预览通过「打开显示预览」使用。连接手机无需手动启动局域网服务：
 
-```sh
-node core/main.mjs --data .data --host 0.0.0.0 --cert /path/to/cert.pem --key /path/to/key.pem
-```
+1. 手机和 Mac 连接同一 Wi-Fi 或局域网。
+2. Mac App「显示设备」点击「开启手机连接」，自动启动独立显示端口（默认 43121）。管理端口 43120 仍仅在本机开放。
+3. 选择 Mac 的局域网 IP，点击「生成配对二维码」。手机扫码后配对码自动填入，确认连接即可。也可手动输入显示地址和 8 位码。
 
-使用 Mac App 启动 LAN 服务时，可设置 `AGENT_DECK_HOST`、`AGENT_DECK_CERT`、`AGENT_DECK_KEY`。证书需要覆盖实际使用的地址；手机和 Mac 在同一局域网。管理端生成 8 位配对码，2 分钟有效且一次使用。手机打开显示地址输入配对码，配对后只获得显示权限。设备可随时在 Mac 撤销。
+二维码包含局域网地址和两分钟有效、一次使用的配对码。配对码放在 URL fragment，手机读取后立即清除；管理凭据不会进入二维码。配对后的手机只获得显示权限。Mac 可以撤销配对、关闭手机连接；网络设置保留到下次启动。
 
-本机管理 URL 和 Agent 采集 URL 使用 `127.0.0.1`，TLS 证书也必须覆盖它。若使用私有 CA，Node 采集进程需正常信任该 CA，例如通过 `NODE_EXTRA_CA_CERTS` 指定 CA 文件。证书部署体验尚未产品化，这是手机实机验证前的主要待办。
+默认手机连接使用 HTTP，仅适合可信局域网，传输未加密。HTTP 下亮屏 API 可能不可用。可通过核心启动参数 --cert/--key 或 App 的 AGENT_DECK_CERT/AGENT_DECK_KEY 配置 HTTPS；手机需正常信任证书。系统防火墙和 Wi-Fi 客户端隔离也可能影响连接。真实旧 Android 仍待验证。
 
 显示端提供全屏和亮屏按钮；亮屏依赖设备浏览器能力。在不支持的旧浏览器上会提示采用系统休眠设置。尚未在真实旧 Android 上验证。
 

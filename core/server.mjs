@@ -1,4 +1,5 @@
 import http from 'node:http';
+import QRCode from 'qrcode';
 import https from 'node:https';
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { readFileSync, writeFileSync, chmodSync } from 'node:fs';
@@ -17,12 +18,15 @@ async function body(req) {
   for await (const chunk of req) { value+=chunk.toString(); if (Buffer.byteLength(value)>MAX_MESSAGE_BYTES) { const e=new Error('Request too large');e.status=413;throw e; } }
   try { return JSON.parse(value); } catch { const e=new Error('Invalid JSON');e.status=400;throw e; }
 }
-export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,key,integrationOptions={}}) {
+export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,key,integrationOptions={},devicePort=43121}) {
   const tls=!!(cert&&key);
   if (!['127.0.0.1','::1','localhost'].includes(host) && !tls) throw new Error('LAN mode requires TLS: provide --cert and --key');
   const store=new Store(join(dataDir,'deck.sqlite'));
   const admin=token(), hookToken=store.get('core','hookToken')??token();store.set('core','hookToken',hookToken);
   let login=token(), pair=null, sequence=0, closing=false;
+  let deviceServer=null;
+  const lanAddresses=()=>Object.entries(networkInterfaces()).flatMap(([name,entries])=>entries.filter(x=>x.family==='IPv4'&&!x.internal&&!/^(utun|tun|tap|lo)/.test(name)).map(x=>({address:x.address,name}))).sort((a,b)=>Number(!/^en/.test(a.name))-Number(!/^en/.test(b.name)));
+  const networkStatus=()=>({enabled:!!deviceServer,port:deviceServer?.address()?.port??null,addresses:lanAddresses(),encrypted:tls});
   const streams=new Set(), pairAttempts=new Map();
   let devices=store.get('core','devices',[]);
   let layouts=store.get('core','layouts',{});
@@ -33,7 +37,7 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
     const hidden=layouts[device?.id??'preview']?.hidden??[];
     return {apiVersion:1,sequence,serverTime:Date.now(),cards:hostPlugins.cards().filter(c=>!hidden.includes(c.pluginId)),layout:layouts[device?.id??'preview']??{hidden:[]}};
   };
-  const adminSnapshot=()=>({...displaySnapshot(null),allCards:hostPlugins.cards(),integrations:integrations.status(),plugins:hostPlugins.describe(),devices:devices.map(({credential,...d})=>d),layouts,connection:{host,port:server.address()?.port??port,tls,lan:!['127.0.0.1','::1','localhost'].includes(host)}});
+  const adminSnapshot=()=>({...displaySnapshot(null),allCards:hostPlugins.cards(),integrations:integrations.status(),network:networkStatus(),plugins:hostPlugins.describe(),devices:devices.map(({credential,...d})=>d),layouts,connection:{host,port:server.address()?.port??port,tls,lan:!['127.0.0.1','::1','localhost'].includes(host)}});
   function publish() {
     sequence++;
     for (const s of streams) {
@@ -52,13 +56,14 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
     return req.headers.origin===`${tls?'https':'http'}://${req.headers.host}`;
   }
   const cookie=(name,value)=>`${name}=${value}; HttpOnly; SameSite=Strict; Path=/;${tls?' Secure;':''}`;
-  async function handle(req,res) {
+  async function handle(req,res,deviceOnly=false) {
     res.setHeader('X-Content-Type-Options','nosniff');
     res.setHeader('Referrer-Policy','no-referrer');
     res.setHeader('Content-Security-Policy',"default-src 'self'; connect-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     res.setHeader('Cache-Control','no-store');
     try {
       const url=new URL(req.url,'http://localhost'), path=url.pathname;
+      if(deviceOnly&&!['/','/display','/app.js','/style.css','/api/pair','/api/snapshot','/api/events'].includes(path))return json(res,403,{error:'此端口仅用于手机显示'});
       if (path==='/admin/login' && req.method==='GET') {
         if (!equal(url.searchParams.get('code'),login)) return json(res,401,{error:'登录链接已失效，请重新启动 Mac App'});
         login=token();runtime.adminURL=base+'/admin/login?code='+login;
@@ -87,13 +92,13 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
         const event=await body(req);
         await hostPlugins.request('agents','event',event);integrations.recordEvent(event.source);publish();return json(res,200,{ok:true});
       }
-      const isAdmin=adminAuth(req), device=deviceAuth(req);
+      const isAdmin=!deviceOnly&&adminAuth(req), device=deviceAuth(req);
       if (path.startsWith('/api/')) {
         if (!isAdmin && !device) return json(res,401,{error:'请先配对设备'});
         if (path==='/api/snapshot' && req.method==='GET') return json(res,200,isAdmin?adminSnapshot():displaySnapshot(device));
         if (path==='/api/events' && req.method==='GET') {
           res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-store','Connection':'keep-alive'});
-          const stream={res,admin:isAdmin,device};streams.add(stream);
+          const stream={res,admin:isAdmin,device,deviceOnly};streams.add(stream);
           res.write(`event: snapshot\ndata: ${JSON.stringify(isAdmin?adminSnapshot():displaySnapshot(device))}\n\n`);
           const pulse=setInterval(()=>res.write(': keepalive\n\n'),15000);
           res.on('close',()=>{clearInterval(pulse);streams.delete(stream);});return;
@@ -110,10 +115,28 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
         if (path==='/api/integrations/refresh' && req.method==='POST') {await integrations.refresh();publish();return json(res,200,{ok:true});}
         if (path==='/api/plugins' && req.method==='POST') {await hostPlugins.configure(data.id,data);return json(res,200,{ok:true});}
         if (path==='/api/actions' && req.method==='POST') {const result=await hostPlugins.request(data.pluginId,'action',{action:data.action,params:data.params});return json(res,200,result);}
+        if (path==='/api/network' && req.method==='POST') {
+          if(!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress))return json(res,403,{error:'请在 Mac 本机设置手机连接'});
+          if(typeof data.enabled!=='boolean')throw new Error('Invalid network setting');
+          if(data.enabled&&!deviceServer){
+            const next=tls?https.createServer({cert:readFileSync(cert),key:readFileSync(key)},(req,res)=>handle(req,res,true)):http.createServer((req,res)=>handle(req,res,true));
+            next.requestTimeout=10000;next.headersTimeout=10000;
+            await new Promise((resolve,reject)=>{next.once('error',reject);next.listen(devicePort,'0.0.0.0',resolve);});deviceServer=next;
+          }else if(!data.enabled&&deviceServer){
+            pair=null;for(const stream of streams)if(stream.deviceOnly){stream.res.end();streams.delete(stream);}
+            const old=deviceServer;deviceServer=null;old.closeAllConnections();await new Promise(resolve=>old.close(resolve));
+          }
+          store.set('core','deviceNetworkEnabled',data.enabled);publish();return json(res,200,networkStatus());
+        }
         if (path==='/api/pair/create' && req.method==='POST') {
           pair={code:String(randomInt(10000000,100000000)),expires:Date.now()+120000};
-          const lanAddress=Object.values(networkInterfaces()).flat().find(x=>x.family==='IPv4'&&!x.internal)?.address;
-          return json(res,200,{...pair,url:`${tls?'https':'http'}://${host==='0.0.0.0'?(lanAddress??'localhost'):host}:${server.address().port}/display`,lan:tls&&!['127.0.0.1','localhost','::1'].includes(host)});
+          const addresses=lanAddresses();
+          const address=data.address??addresses[0]?.address;
+          if(data.address&&!addresses.some(x=>x.address===data.address))throw new Error('所选网络地址已失效，请重新生成');
+          const displayURL=deviceServer&&address?`${tls?'https':'http'}://${address}:${deviceServer.address().port}/display`:null;
+          const qrURL=displayURL?displayURL+'#pair='+pair.code:null;
+          const qr=qrURL?await QRCode.toDataURL(qrURL,{width:280,margin:4,errorCorrectionLevel:'M'}):null;
+          return json(res,200,{...pair,url:displayURL,qr,lan:!!displayURL,encrypted:tls,previewURL:base+'/display'});
         }
         if (path==='/api/devices/revoke' && req.method==='POST') {
           devices=devices.filter(d=>d.id!==data.id);delete layouts[data.id];store.set('core','devices',devices);store.set('core','layouts',layouts);publish();return json(res,200,{ok:true});
@@ -140,5 +163,9 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
   const runtime={pid:process.pid,baseURL:base,adminURL:base+'/admin/login?code='+login,hookToken,hookURL:base+'/api/hooks'};
   const runtimePath=join(dataDir,'runtime.json');writeFileSync(runtimePath,JSON.stringify(runtime),{mode:0o600});chmodSync(runtimePath,0o600);
   hostPlugins.start();
-  return {server,store,integrations,plugins:hostPlugins,runtime,publish,async close(){closing=true;for(const s of streams)s.res.end();await hostPlugins.close();await new Promise(resolve=>server.close(resolve));store.close();}};
+  if(store.get('core','deviceNetworkEnabled',false)){
+    const next=tls?https.createServer({cert:readFileSync(cert),key:readFileSync(key)},(req,res)=>handle(req,res,true)):http.createServer((req,res)=>handle(req,res,true));
+    try{await new Promise((resolve,reject)=>{next.once('error',reject);next.listen(devicePort,'0.0.0.0',resolve);});deviceServer=next;}catch{store.set('core','deviceNetworkEnabled',false);}
+  }
+  return {server,store,integrations,plugins:hostPlugins,runtime,publish,async close(){closing=true;for(const s of streams)s.res.end();await hostPlugins.close();if(deviceServer){deviceServer.closeAllConnections();await new Promise(resolve=>deviceServer.close(resolve));}await new Promise(resolve=>server.close(resolve));store.close();}};
 }

@@ -11,6 +11,9 @@ for component in core sdk plugins web integrations; do
   mkdir -p "$app_dir/Contents/Resources/code/$component"
   cp -R "$component/" "$app_dir/Contents/Resources/code/$component/"
 done
+cp package.json package-lock.json "$app_dir/Contents/Resources/code/"
+rm -rf "$app_dir/Contents/Resources/code/node_modules"
+cp -R node_modules "$app_dir/Contents/Resources/code/node_modules"
 # Development-only wrapper, tied to this machine's Node executable and project data.
 python3 - "$app_dir/Contents/Info.plist" "$(command -v node)" "$project_dir/.data" <<'PY'
 import plistlib, sys

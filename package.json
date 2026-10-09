@@ -1,6 +1,22 @@
 {
-  "name": "agent-deck", "version": "0.1.0", "private": true, "type": "module",
+  "name": "agent-deck",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
   "description": "A plugin-driven local companion display for coding agents and todos",
-  "engines": { "node": ">=24.5.0" },
-  "scripts": { "start": "node core/main.mjs", "test": "node --test tests/*.test.mjs", "mac": "swift run AgentDeck" }
+  "engines": {
+    "node": ">=24.5.0"
+  },
+  "scripts": {
+    "start": "node core/main.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "mac": "swift run AgentDeck"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "jsqr": "^1.4.0",
+    "pngjs": "^7.0.0"
+  }
 }

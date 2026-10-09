@@ -5,3 +5,5 @@
 dist/
 *.log
 *.pem
+
+node_modules/

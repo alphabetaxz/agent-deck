@@ -13,7 +13,7 @@ const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const until=async predicate=>{for(let i=0;i<100;i++){if(predicate())return;await new Promise(r=>setTimeout(r,30));}throw new Error('Timed out');};
 async function setup(t) {
   const dataDir=mkdtempSync(join(tmpdir(),'agent-deck-test-'));
-  const deck=await createDeck({root,dataDir,port:0,integrationOptions:{home:join(dataDir,"home"),env:{},probe:async()=>({available:true,found:true,version:"test"})}});
+  const deck=await createDeck({root,dataDir,port:0,devicePort:0,integrationOptions:{home:join(dataDir,"home"),env:{},probe:async()=>({available:true,found:true,version:"test"})}});
   t.after(async()=>{await deck.close();rmSync(dataDir,{recursive:true,force:true});});
   const base=deck.runtime.baseURL;
   const usedAdminURL=deck.runtime.adminURL;
@@ -126,4 +126,22 @@ test('App installs hooks, auto-enables agent plugin, and installed helper works 
   const pair=await (await request('/api/pair/create',{})).json();const response=await fetch(base+'/api/pair',{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:JSON.stringify({code:pair.code})});const cookie=response.headers.get('set-cookie').split(';')[0];
   const phone=await (await fetch(base+'/api/snapshot',{headers:{Cookie:cookie}})).json();assert.equal(phone.integrations,undefined);
   assert.equal((await fetch(base+'/api/integrations',{method:'POST',headers:{Cookie:cookie,Origin:base,'Content-Type':'application/json'},body:JSON.stringify({source:'pi',action:'install'})})).status,403);
+});
+
+test('phone network advertises Mac IP and decodable QR, isolates management, and shuts down',async t=>{
+ const {deck,request,base,cookie}=await setup(t);
+ assert.equal((await request('/api/network',{enabled:true},{Origin:'https://other.example'})).status,403);
+ const disabled=await (await request('/api/pair/create',{})).json();assert.equal(disabled.url,null);assert.equal(disabled.qr,null);
+ assert.equal((await request('/api/network',{enabled:true})).status,200);
+ const network=(await (await request('/api/snapshot')).json()).network;assert.ok(network.port);assert.ok(network.addresses.length);
+ const pair=await (await request('/api/pair/create',{address:network.addresses[0].address})).json();assert.equal(new URL(pair.url).hostname,network.addresses[0].address);assert.notEqual(new URL(pair.url).hostname,'127.0.0.1');
+ const {PNG}=await import('pngjs');const {default:jsQR}=await import('jsqr');const png=PNG.sync.read(Buffer.from(pair.qr.split(',')[1],'base64'));const decoded=jsQR(new Uint8ClampedArray(png.data),png.width,png.height);assert.equal(decoded.data,pair.url+'#pair='+pair.code);
+ const lan='http://127.0.0.1:'+network.port;
+ assert.equal((await fetch(lan+'/admin',{headers:{Cookie:cookie}})).status,403);
+ assert.equal((await fetch(lan+'/api/hooks',{method:'POST',headers:{Authorization:'Bearer '+deck.runtime.hookToken}})).status,403);
+ assert.equal((await fetch(lan+'/api/snapshot',{headers:{Cookie:cookie}})).status,401);
+ const response=await fetch(lan+'/api/pair',{method:'POST',headers:{Origin:lan,'Content-Type':'application/json'},body:JSON.stringify({code:pair.code,name:'QR test phone'})});assert.equal(response.status,200);const phoneCookie=response.headers.get('set-cookie').split(';')[0];
+ const snapshot=await (await fetch(lan+'/api/snapshot',{headers:{Cookie:phoneCookie}})).json();assert.equal(snapshot.plugins,undefined);assert.equal(snapshot.integrations,undefined);
+ assert.equal((await fetch(lan+'/api/network',{method:'POST',headers:{Cookie:phoneCookie,Origin:lan,'Content-Type':'application/json'},body:'{"enabled":false}'})).status,403);
+ assert.equal((await request('/api/network',{enabled:false})).status,200);assert.equal((await (await request('/api/snapshot')).json()).network.enabled,false);await assert.rejects(fetch(lan+'/display'));
 });
