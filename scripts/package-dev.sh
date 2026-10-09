@@ -7,7 +7,7 @@ CLANG_MODULE_CACHE_PATH="$project_dir/.build/clang-cache" SWIFTPM_MODULECACHE_OV
 app_dir="$project_dir/dist/Agent Deck Dev.app"
 mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources/code"
 cp .build/debug/AgentDeck "$app_dir/Contents/MacOS/AgentDeck"
-for component in core sdk plugins web; do
+for component in core sdk plugins web integrations; do
   mkdir -p "$app_dir/Contents/Resources/code/$component"
   cp -R "$component/" "$app_dir/Contents/Resources/code/$component/"
 done

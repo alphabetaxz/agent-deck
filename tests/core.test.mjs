@@ -13,7 +13,7 @@ const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const until=async predicate=>{for(let i=0;i<100;i++){if(predicate())return;await new Promise(r=>setTimeout(r,30));}throw new Error('Timed out');};
 async function setup(t) {
   const dataDir=mkdtempSync(join(tmpdir(),'agent-deck-test-'));
-  const deck=await createDeck({root,dataDir,port:0});
+  const deck=await createDeck({root,dataDir,port:0,integrationOptions:{home:join(dataDir,"home"),env:{},probe:async()=>({available:true,found:true,version:"test"})}});
   t.after(async()=>{await deck.close();rmSync(dataDir,{recursive:true,force:true});});
   const base=deck.runtime.baseURL;
   const usedAdminURL=deck.runtime.adminURL;
@@ -111,4 +111,19 @@ test('actual hook CLI transports payload without emitting approval directives',a
   const {deck,dataDir,enable}=await setup(t);await enable('agents');
   const result=await runHook(dataDir,{session_id:'helper-session',hook_event_name:'PermissionRequest',cwd:'/code/helper'});
   assert.deepEqual(result,{code:0,stdout:'',stderr:''});assert.equal(deck.plugins.cards()[0].status,'waiting');
+});
+
+test('App installs hooks, auto-enables agent plugin, and installed helper works without environment setup',async t=> {
+  const {deck,request,base,dataDir}=await setup(t);
+  assert.equal((await request('/api/integrations',{source:'claude',action:'install'},{Origin:'https://other.example'})).status,403);
+  assert.equal((await request('/api/integrations',{source:'claude',action:'install'})).status,200);
+  await until(()=>deck.plugins.get('agents').status==='running');
+  const result=await new Promise((resolve,reject)=>{
+    const child=spawn(process.execPath,[join(dataDir,'integrations/hook.mjs'),'claude','--data',dataDir],{env:{...process.env,AGENT_DECK_DATA:'/wrong-directory'},stdio:['pipe','pipe','pipe']});
+    let output='';child.stdout.on('data',c=>output+=c);child.stderr.on('data',c=>output+=c);child.on('error',reject);child.on('close',code=>resolve({code,output}));child.stdin.end(JSON.stringify({hook_event_name:'SessionStart',session_id:'installed-helper-test',cwd:'/project'}));
+  });
+  assert.deepEqual(result,{code:0,output:''});const snapshot=await (await request('/api/snapshot')).json();assert.equal(snapshot.integrations.find(i=>i.source==='claude').state,'connected');assert.equal(JSON.stringify(snapshot).includes(deck.runtime.hookToken),false);
+  const pair=await (await request('/api/pair/create',{})).json();const response=await fetch(base+'/api/pair',{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:JSON.stringify({code:pair.code})});const cookie=response.headers.get('set-cookie').split(';')[0];
+  const phone=await (await fetch(base+'/api/snapshot',{headers:{Cookie:cookie}})).json();assert.equal(phone.integrations,undefined);
+  assert.equal((await fetch(base+'/api/integrations',{method:'POST',headers:{Cookie:cookie,Origin:base,'Content-Type':'application/json'},body:JSON.stringify({source:'pi',action:'install'})})).status,403);
 });

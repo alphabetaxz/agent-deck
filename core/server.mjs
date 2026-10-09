@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { networkInterfaces } from 'node:os';
 import { PluginHost } from './plugins.mjs';
+import { IntegrationManager } from './integrations.mjs';
 import { Store } from './store.mjs';
 import { MAX_MESSAGE_BYTES } from './protocol.mjs';
 
@@ -16,7 +17,7 @@ async function body(req) {
   for await (const chunk of req) { value+=chunk.toString(); if (Buffer.byteLength(value)>MAX_MESSAGE_BYTES) { const e=new Error('Request too large');e.status=413;throw e; } }
   try { return JSON.parse(value); } catch { const e=new Error('Invalid JSON');e.status=400;throw e; }
 }
-export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,key}) {
+export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,key,integrationOptions={}}) {
   const tls=!!(cert&&key);
   if (!['127.0.0.1','::1','localhost'].includes(host) && !tls) throw new Error('LAN mode requires TLS: provide --cert and --key');
   const store=new Store(join(dataDir,'deck.sqlite'));
@@ -25,12 +26,14 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
   const streams=new Set(), pairAttempts=new Map();
   let devices=store.get('core','devices',[]);
   let layouts=store.get('core','layouts',{});
+  const integrations=new IntegrationManager({root,dataDir,...integrationOptions});
+  await integrations.refresh();
   const hostPlugins=new PluginHost(join(root,'plugins'),store,()=>{if (!closing) publish();});
   const displaySnapshot=(device)=> {
     const hidden=layouts[device?.id??'preview']?.hidden??[];
     return {apiVersion:1,sequence,serverTime:Date.now(),cards:hostPlugins.cards().filter(c=>!hidden.includes(c.pluginId)),layout:layouts[device?.id??'preview']??{hidden:[]}};
   };
-  const adminSnapshot=()=>({...displaySnapshot(null),allCards:hostPlugins.cards(),plugins:hostPlugins.describe(),devices:devices.map(({credential,...d})=>d),layouts,connection:{host,port:server.address()?.port??port,tls,lan:!['127.0.0.1','::1','localhost'].includes(host)}});
+  const adminSnapshot=()=>({...displaySnapshot(null),allCards:hostPlugins.cards(),integrations:integrations.status(),plugins:hostPlugins.describe(),devices:devices.map(({credential,...d})=>d),layouts,connection:{host,port:server.address()?.port??port,tls,lan:!['127.0.0.1','::1','localhost'].includes(host)}});
   function publish() {
     sequence++;
     for (const s of streams) {
@@ -82,7 +85,7 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
         if (!equal(req.headers.authorization?.replace(/^Bearer /,''),hookToken)) return json(res,401,{error:'Unauthorized'});
         if (!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) return json(res,403,{error:'Hooks are local only'});
         const event=await body(req);
-        await hostPlugins.request('agents','event',event);return json(res,200,{ok:true});
+        await hostPlugins.request('agents','event',event);integrations.recordEvent(event.source);publish();return json(res,200,{ok:true});
       }
       const isAdmin=adminAuth(req), device=deviceAuth(req);
       if (path.startsWith('/api/')) {
@@ -98,6 +101,13 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
         if (!isAdmin) return json(res,403,{error:'请在 Mac 端管理'});
         if (!originOK(req)) return json(res,403,{error:'Invalid origin'});
         const data=await body(req);
+        if (path==='/api/integrations' && req.method==='POST') {
+          if (!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) return json(res,403,{error:'请在本机 App 管理接入'});
+          await integrations.change(data.source,data.action);
+          if(data.action==='install')await hostPlugins.configure('agents',{enabled:true});
+          publish();return json(res,200,{ok:true});
+        }
+        if (path==='/api/integrations/refresh' && req.method==='POST') {await integrations.refresh();publish();return json(res,200,{ok:true});}
         if (path==='/api/plugins' && req.method==='POST') {await hostPlugins.configure(data.id,data);return json(res,200,{ok:true});}
         if (path==='/api/actions' && req.method==='POST') {const result=await hostPlugins.request(data.pluginId,'action',{action:data.action,params:data.params});return json(res,200,result);}
         if (path==='/api/pair/create' && req.method==='POST') {
@@ -130,5 +140,5 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
   const runtime={pid:process.pid,baseURL:base,adminURL:base+'/admin/login?code='+login,hookToken,hookURL:base+'/api/hooks'};
   const runtimePath=join(dataDir,'runtime.json');writeFileSync(runtimePath,JSON.stringify(runtime),{mode:0o600});chmodSync(runtimePath,0o600);
   hostPlugins.start();
-  return {server,store,plugins:hostPlugins,runtime,publish,async close(){closing=true;for(const s of streams)s.res.end();await hostPlugins.close();await new Promise(resolve=>server.close(resolve));store.close();}};
+  return {server,store,integrations,plugins:hostPlugins,runtime,publish,async close(){closing=true;for(const s of streams)s.res.end();await hostPlugins.close();await new Promise(resolve=>server.close(resolve));store.close();}};
 }

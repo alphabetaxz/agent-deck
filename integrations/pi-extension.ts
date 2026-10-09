@@ -2,6 +2,7 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+const INSTALLED_DATA_DIR: string | undefined = undefined;
 
 // Written independently against Pi's public extension API. No approval interception.
 export default function (pi: ExtensionAPI) {
@@ -10,7 +11,7 @@ export default function (pi: ExtensionAPI) {
   let turnId = '';
   const send = async (event: string, ctx: any, extra: Record<string, unknown> = {}) => {
     try {
-      const data = process.env.AGENT_DECK_DATA ?? join(homedir(), 'Library/Application Support/AgentDeck');
+      const data = INSTALLED_DATA_DIR ?? process.env.AGENT_DECK_DATA ?? join(homedir(), 'Library/Application Support/AgentDeck');
       const runtime = JSON.parse(readFileSync(join(data, 'runtime.json'), 'utf8'));
       const url = new URL(runtime.hookURL);
       if (!['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) return;

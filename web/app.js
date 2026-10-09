@@ -67,6 +67,21 @@ function renderPlugins() {
     container.append(panel);
   }
 }
+let integrationFingerprint='';
+function renderIntegrations() {
+  const fingerprint=JSON.stringify(state.integrations);if(fingerprint===integrationFingerprint)return;integrationFingerprint=fingerprint;
+  const container=$('integration-list');container.replaceChildren();
+  const labels={missing:'未安装工具',unavailable:'工具无法启动',unconfigured:'尚未接入',configured:'等待新会话',connected:'已收到状态',repair:'需要修复',error:'配置异常'};
+  for(const item of state.integrations??[]) {
+    const panel=el('article',null,'plugin');const head=el('header');head.append(el('h3',item.name),el('span',labels[item.state],'muted'));panel.append(head);
+    if(item.version)panel.append(el('small',item.version));
+    panel.append(el('p',item.error??item.message,'muted'));
+    const install=button(item.needsRepair?'修复接入':item.installed?'重新安装':'一键接入',()=>api('/api/integrations',{source:item.source,action:'install'}));install.disabled=!item.available;panel.append(install);
+    if(item.hasConfig)panel.append(button('移除接入',()=>api('/api/integrations',{source:item.source,action:'remove'})));
+    if(item.lastEventAt)panel.append(el('small','最近收到状态：'+new Date(item.lastEventAt).toLocaleTimeString('zh-CN')));
+    container.append(panel);
+  }
+}
 function renderDevices() {
   const fingerprint=JSON.stringify(state.devices);if(fingerprint!==deviceFingerprint){deviceFingerprint=fingerprint;const container=$('device-list');container.replaceChildren();
     if(!state.devices.length)container.append(el('p','尚未配对手机。你可以先打开本机显示预览。','muted'));
@@ -88,7 +103,7 @@ function render(snapshot) {
   if(mode==='admin'){
     const agents=(state.allCards??state.cards).filter(c=>c.type==='status');const todos=(state.allCards??state.cards).find(c=>c.pluginId==='todo')?.items??[];
     const summary=$('summary');summary.replaceChildren();for(const [label,value] of [['Agent 工作中',agents.filter(c=>c.status==='running').length],['等待你处理',agents.filter(c=>c.status==='waiting').length],['今日待办',`${todos.filter(t=>t.done).length} / ${todos.length}`]]){const box=el('div');box.append(el('span',label),el('b',String(value)));summary.append(box);}
-    renderTodos();renderPlugins();renderDevices();
+    renderTodos();renderIntegrations();renderPlugins();renderDevices();
   } else $('last-update').textContent='最后同步 '+new Date(lastSeen).toLocaleTimeString('zh-CN',{hour12:false});
 }
 async function connect() {
@@ -99,6 +114,7 @@ async function connect() {
   stream.onerror=()=>{$('connection').textContent='离线 · 重连中';if($('connection-dot'))$('connection-dot').style.background='var(--amber)';notice('与 Mac 的连接已中断。当前显示的是最后同步的数据。');stream.close();retry=setTimeout(connect,3000);};
 }
 if(mode==='admin') {
+  $('integration-refresh').addEventListener('click',async()=>{const b=$('integration-refresh');b.disabled=true;b.textContent='检测中…';try{await api('/api/integrations/refresh',{});}catch(e){notice(e.message);}finally{b.disabled=false;b.textContent='重新检测';}});
   $('todo-form').addEventListener('submit',async e=>{e.preventDefault();const input=$('todo-title');try{await todoAction('add',{title:input.value});input.value='';notice('');}catch(e){notice(e.message);}});
   $('pair-button').addEventListener('click',async()=>{try{const pair=await api('/api/pair/create',{});const panel=$('pair-info');panel.replaceChildren(el('p','配对码 · 2 分钟有效'),el('strong',pair.code),el('p','在手机浏览器打开：'+pair.url),el('p',pair.lan?'手机与 Mac 应在同一局域网，并信任部署所用证书。':'当前仅运行本机预览。连接真实手机需要启用已配置 TLS 的局域网服务。','muted'));panel.hidden=false;}catch(e){notice(e.message);}});
   $('layout-device').addEventListener('change',renderLayout);

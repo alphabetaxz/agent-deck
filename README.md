@@ -2,7 +2,7 @@
 
 把旧 Android 手机变成桌面状态屏。Mac 管理 Todo、Agent 状态和插件，手机显示你需要关注的信息。
 
-**当前为 v0.1 开发预览，不是完成的发布版。** 独立进程插件、Todo、时钟、Agent 事件桥接和浏览器显示链路已实现。真实 Android 兼容、自动 Hook 安装、Codex 桌面会话发现、二维码配对和完整原生管理界面仍待完成。
+**当前为 v0.1 开发预览，不是完成的发布版。** 独立进程插件、Todo、时钟、Agent 事件桥接和浏览器显示链路已实现。真实 Android 兼容、Codex 桌面会话发现、二维码配对和完整原生管理界面仍待完成。
 
 ## 运行
 
@@ -46,31 +46,19 @@ node core/main.mjs --data .data --host 0.0.0.0 --cert /path/to/cert.pem --key /p
 
 ## Agent 接入
 
-先启用「编程 Agent」插件。接入脚本只观察事件，不接管审批，不输出允许/拒绝指令。服务不可用时，短超时退出，让工具继续工作。
+在 Mac App 的「Agent 接入」区域操作，无需编辑配置、设置环境变量或给 pi 添加启动参数：
 
-### Claude Code
+1. App 自动检测 Claude Code、pi、Codex CLI 是否可运行；安装工具后可点击「重新检测」。
+2. 点击「一键接入」。App 自动启用「编程 Agent」插件，合并已有 Hooks 或安装自动发现的 pi 扩展，并保存数据目录。
+3. 照常打开一个新会话。App 收到实际事件后才显示「已收到状态」。
 
-```sh
-node scripts/hook-config.mjs claude
-```
+安装前自动备份到数据目录的 `backups/`。重复安装不会增加重复 Hooks；移除只清理 Agent Deck 自己安装的条目。已有同名 pi 扩展或被修改的扩展会保留并报告冲突。配置文件使用符号链接时暂不自动修改。
 
-命令生成配置片段，不自动修改任何现有配置。将相应 Hook 条目合并到 Claude Code 的 settings.json，保留已有 Hooks。若核心用自定义数据目录，启动 Claude 前设置 `AGENT_DECK_DATA` 为该目录的绝对路径。默认目录为 `~/Library/Application Support/AgentDeck`。
+Codex 首次使用仍须在工具自身确认 Hook 信任（官方安全要求，App 不绕过）。App 自动写入 Hooks 并开启支持的 Hooks 功能开关；移除时只恢复仍与安装记录一致的开关。配置写入成功与实际连接分开显示。本机 Codex CLI 缺少可执行文件，界面会显示工具无法启动；真实 Codex CLI 尚未验证。**不宣称支持旁观 Codex 桌面 App 的会话。**
 
-### pi
+接入脚本只观察事件，不接管审批。服务不可用时短超时退出，让工具继续工作。pi 扩展面向 `@earendil-works/pi-coding-agent` 0.87.1，使用 `agent_settled` 判断本轮停止并每 15 秒发送存活心跳。
 
-```sh
-pi --extension ./integrations/pi-extension.ts
-```
-
-扩展面向 `@earendil-works/pi-coding-agent`，本机核对版本为 0.87.1；使用 `agent_settled` 判断本轮停止，并每 15 秒发送存活心跳。不支持该事件的旧版本需要调整适配器。
-
-### Codex CLI
-
-```sh
-node scripts/hook-config.mjs codex
-```
-
-输出 hooks.json 格式片段。先检查 CLI 的实际版本、Hooks 支持和配置位置，再手动合并并执行工具自身要求的信任检查。本项目不自动启用其 feature flag。本机 CLI 安装缺少可执行文件，因此 Codex 目前仅通过事件协议测试，未通过真实 CLI 验证。**不宣称支持旁观 Codex 桌面 App 的会话。**
+开发者仍可用 `scripts/hook-config.mjs` 生成手动配置片段，或用 `pi --extension ./integrations/pi-extension.ts` 临时加载；自定义数据目录时这些手动方式需要 `AGENT_DECK_DATA`。App 安装方式不需要该变量。
 
 ### 当前状态边界
 
