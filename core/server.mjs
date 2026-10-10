@@ -170,5 +170,5 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
     const next=tls?https.createServer({cert:readFileSync(cert),key:readFileSync(key)},(req,res)=>handle(req,res,true)):http.createServer((req,res)=>handle(req,res,true));
     try{await new Promise((resolve,reject)=>{next.once('error',reject);next.listen(devicePort,'0.0.0.0',resolve);});deviceServer=next;}catch{store.set('core','deviceNetworkEnabled',false);}
   }
-  return {server,store,integrations,desktop,plugins:hostPlugins,runtime,publish,async close(){closing=true;await desktop.close();for(const s of streams)s.res.end();await hostPlugins.close();if(deviceServer){deviceServer.closeAllConnections();await new Promise(resolve=>deviceServer.close(resolve));}await new Promise(resolve=>server.close(resolve));store.close();}};
+  return {server,store,integrations,desktop,plugins:hostPlugins,runtime,publish,async close(){closing=true;await desktop.close();for(const s of streams)s.res.end();await hostPlugins.close();if(deviceServer){deviceServer.closeAllConnections();await new Promise(resolve=>deviceServer.close(resolve));}server.closeAllConnections();await new Promise(resolve=>server.close(resolve));store.close();}};
 }

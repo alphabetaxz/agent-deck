@@ -152,3 +152,20 @@ test('desktop integration runs without CLI and remove clears only desktop cards'
  assert.equal((await request('/api/integrations',{source:'codex-desktop',action:'install'})).status,200);await until(()=>deck.plugins.get('agents').status==='running');await deck.desktop.tick();await until(()=>deck.plugins.cards().some(c=>c.subtitle==='Codex'));const snapshot=await (await request('/api/snapshot')).json();assert.equal(snapshot.integrations.find(x=>x.source==='codex-desktop').state,'connected');
  await deck.plugins.request('agents','event',{source:'pi',session_id:'other',hook_event_name:'SessionStart'});assert.equal((await request('/api/integrations',{source:'codex-desktop',action:'remove'})).status,200);assert.equal(deck.plugins.cards().some(c=>c.subtitle==='Codex'),false);assert.equal(deck.plugins.cards().some(c=>c.subtitle==='pi'),true);
 });
+
+test('shutdown releases incomplete HTTP connections and the port can be reused', {timeout:5000}, async()=>{
+ const {createConnection}=await import('node:net');
+ const dataDir=mkdtempSync(join(tmpdir(),'agent-deck-shutdown-'));
+ const options={root,dataDir,port:0,integrationOptions:{home:join(dataDir,'home'),env:{},probe:async()=>({available:false})}};
+ let deck=await createDeck(options), socket;
+ try {
+  const port=deck.server.address().port;
+  socket=createConnection({host:'127.0.0.1',port});socket.on('error',()=>{});
+  await new Promise(resolve=>socket.once('connect',resolve));
+  socket.write('GET /api/health HTTP/1.1\r\nHost: localhost\r\n');
+  await new Promise(resolve=>setTimeout(resolve,20));
+  await deck.close();deck=null;
+  const next=await createDeck({...options,port});deck=next;
+  assert.equal((await fetch(next.runtime.baseURL+'/api/health')).status,200);
+ } finally {socket?.destroy();if(deck)await deck.close();rmSync(dataDir,{recursive:true,force:true});}
+});
