@@ -81,6 +81,14 @@ export class IntegrationManager {
     this.paths={claude:join(env.CLAUDE_CONFIG_DIR??join(home,'.claude'),'settings.json'),codex:join(env.CODEX_HOME??join(home,'.codex'),'hooks.json'),pi:join(env.PI_CODING_AGENT_DIR??join(home,'.pi','agent'),'extensions','agent-deck.ts')};
     this.codexConfig=join(dirname(this.paths.codex),'config.toml');
   }
+  generatedPiExtension(text) {
+    if(typeof text!=='string')return false;
+    // Accept only an exact generated template, with its JSON data-path parameter replaced.
+    // A filename or a marker alone is not proof that we own an extension.
+    const parameter=/^const INSTALLED_DATA_DIR: string \| undefined = (undefined|"(?:\\.|[^"\\])*");$/m;
+    if(!parameter.test(text))return false;
+    return text.replace(parameter,'const INSTALLED_DATA_DIR: string | undefined = undefined;')===readFileSync(join(this.root,'integrations/pi-extension.ts'),'utf8');
+  }
   manifestPath(source){return join(this.directory,source+'.json');}
   manifest(source){return objectJSON(read(this.manifestPath(source)),'接入记录');}
   async detect(source) {
@@ -110,6 +118,7 @@ export class IntegrationManager {
       let manifest={};
       try {
         manifest=this.manifest(source);hasConfig=!!manifest.installed;
+        if(source==='pi'&&!hasConfig&&this.generatedPiExtension(read(this.paths.pi))){hasConfig=true;needsRepair=true;}
         if(hasConfig){
           if(source==='pi')installed=hash(read(this.paths.pi))===manifest.extensionHash;
           else {
@@ -168,7 +177,7 @@ export class IntegrationManager {
         const tool=await this.probe(source);this.tools.set(source,tool);if(!tool.available)throw new Error(tool.reason??'工具不可用');
         const next={...manifest,installed:true,dataDir:this.dataDir,installedAt:Date.now()};
         if(source==='pi') {
-          if(current!==null&&(!manifest.installed||hash(current)!==manifest.extensionHash))throw new Error('同名 pi 扩展已存在或被修改，已保留原文件');
+          if(current!==null&&(!manifest.installed||hash(current)!==manifest.extensionHash)&&!this.generatedPiExtension(current))throw new Error('同名 pi 扩展已存在或被修改，已保留原文件');
           const template=readFileSync(join(this.root,'integrations/pi-extension.ts'),'utf8');
           const extension=template.replace('const INSTALLED_DATA_DIR: string | undefined = undefined;',`const INSTALLED_DATA_DIR: string | undefined = ${JSON.stringify(this.dataDir)};`);
           if(extension===template)throw new Error('扩展模板缺少安装参数');

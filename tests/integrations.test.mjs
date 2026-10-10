@@ -26,3 +26,19 @@ test('unavailable tools cannot be installed',async t=>{const m=await fixture(t);
 test('TOML feature edits reject ambiguous encodings and preserve user changes on remove',()=>{
  assert.throws(()=>enableFeature('[features]\nhooks = true\nhooks = false','hooks'),/重复/);assert.throws(()=>enableFeature('features = { hooks = false }','hooks'),/暂不支持/);const p=enableFeature('[features]\nhooks = false\n','hooks');assert.equal(restoreFeature(p.text.replace('hooks = true','hooks = false # later'),p),'[features]\nhooks = false # later\n');
 });
+test('pi migrates an unchanged generated extension from another installation with a backup',async t=>{
+ const old=await fixture(t);await old.change('pi','install');const previous=readFileSync(old.paths.pi,'utf8');
+ const next=new IntegrationManager({root,home:old.home,dataDir:join(old.home,'formal-data'),env:{},probe:old.probe});await next.refresh();
+ assert.equal(next.status().find(x=>x.source==='pi').needsRepair,true);
+ await next.change('pi','install');assert.ok(readFileSync(next.paths.pi,'utf8').includes(JSON.stringify(next.dataDir)));
+ assert.equal(next.status().find(x=>x.source==='pi').installed,true);
+ const {readdirSync}=await import('node:fs');const backups=join(next.dataDir,'backups');const backup=readdirSync(backups)[0];assert.equal(readFileSync(join(backups,backup,'pi','pi-extension.ts'),'utf8'),previous);
+ await next.change('pi','install');await next.change('pi','remove');assert.equal(existsSync(next.paths.pi),false);
+});
+test('pi preserves foreign or edited extensions when installation records are missing',async t=>{
+ const old=await fixture(t);await old.change('pi','install');const previous=readFileSync(old.paths.pi,'utf8');
+ const next=new IntegrationManager({root,home:old.home,dataDir:join(old.home,'formal-data'),env:{},probe:old.probe});await next.refresh();
+ for(const text of [previous+'\n// my custom changes','// Agent Deck\nexport default function(){}']){
+  write(next.paths.pi,text);await assert.rejects(next.change('pi','install'),/已保留/);assert.equal(readFileSync(next.paths.pi,'utf8'),text);assert.equal(existsSync(next.manifestPath('pi')),false);
+ }
+});
