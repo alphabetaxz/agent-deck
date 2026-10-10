@@ -42,3 +42,23 @@ main{padding:36px 40px}h1{font-size:32px;letter-spacing:-1px;font-weight:650}h2{
 body[data-mode="display"]{background:#101722}.display-shell>header{padding:0 2px 8px;border-bottom:1px solid #2b3546}.display-shell .brand{font-size:18px}.display-shell .brand-icon{font-size:23px}.display-shell .display-actions{font-size:10px;gap:7px}.display-shell button{font-size:11px;padding:6px 10px}.display-shell #cards{gap:12px}.display-shell>footer{border-top:0;color:#72819b;font-size:9px;letter-spacing:.8px}.display-shell #connection:before{content:"";display:inline-block;width:5px;height:5px;background:var(--accent);border-radius:50%;margin:0 5px 1px 0}
 @media(max-width:900px){main{padding:26px 22px}.rail{padding:14px 22px}h1{font-size:27px}.summary>div{padding:15px}.summary b{font-size:28px}}
 @media(max-height:500px){#cards .card{padding:14px}#cards h3{font-size:17px}.agent-state{padding:8px 11px;font-size:14px}.agent-icon{width:25px;height:25px;font-size:14px}.agent-states{gap:8px}.display-shell>header{padding-bottom:4px}.display-shell .brand{font-size:15px}.display-shell .brand-icon{font-size:20px}.display-shell button{padding:4px 8px;font-size:10px}}
+
+/* Clear, consistent Agent status colors on Mac and older phones. */
+.status.running,#cards .status.running{color:#8fc8ff;background:#213d60;border:1px solid #8fc8ff;}
+.agent-state.state-running{border-left:4px solid #8fc8ff;background:#213d60;padding-left:10px;border-radius:8px;}
+.agent-state.state-running .agent-icon{background:#8fc8ff;color:#213d60;}
+.status.waiting,#cards .status.waiting{color:#ffd078;background:#554024;border:1px solid #ffd078;}
+.agent-state.state-waiting{border-left:4px solid #ffd078;background:#554024;padding-left:10px;border-radius:8px;}
+.agent-state.state-waiting .agent-icon{background:#ffd078;color:#554024;}
+.status.completed,#cards .status.completed{color:#8ce5b2;background:#214837;border:1px solid #8ce5b2;}
+.agent-state.state-completed{border-left:4px solid #8ce5b2;background:#214837;padding-left:10px;border-radius:8px;}
+.agent-state.state-completed .agent-icon{background:#8ce5b2;color:#214837;}
+.status.error,#cards .status.error{color:#ff9ba7;background:#572d39;border:1px solid #ff9ba7;}
+.agent-state.state-error{border-left:4px solid #ff9ba7;background:#572d39;padding-left:10px;border-radius:8px;}
+.agent-state.state-error .agent-icon{background:#ff9ba7;color:#572d39;}
+.status.idle,#cards .status.idle{color:#b7c2d1;background:#303b4b;border:1px solid #b7c2d1;}
+.agent-state.state-idle{border-left:4px solid #b7c2d1;background:#303b4b;padding-left:10px;border-radius:8px;}
+.agent-state.state-idle .agent-icon{background:#b7c2d1;color:#303b4b;}
+.status.unknown,#cards .status.unknown{color:#d2b2ff;background:#403052;border:1px solid #d2b2ff;}
+.agent-state.state-unknown{border-left:4px solid #d2b2ff;background:#403052;padding-left:10px;border-radius:8px;}
+.agent-state.state-unknown .agent-icon{background:#d2b2ff;color:#403052;}

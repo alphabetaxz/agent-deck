@@ -36,7 +36,7 @@
       if (c.type === 'agent-summary') {
         card.className += ' agent-overview'; list = el('div', null, 'agent-states');
         for (j = 0; j < c.tools.length; j++) {
-          row = el('div', null, 'agent-state'); identity = el('span', null, 'agent-identity');
+          row = el('div', null, 'agent-state state-' + c.tools[j].status); identity = el('span', null, 'agent-identity');
           identity.appendChild(el('span', c.tools[j].name === 'pi' ? 'π' : c.tools[j].name.indexOf('Claude') === 0 ? '✳' : 'C', 'agent-icon'));
           identity.appendChild(el('span', c.tools[j].name)); row.appendChild(identity); row.appendChild(status(c.tools[j].status)); list.appendChild(row);
         }
