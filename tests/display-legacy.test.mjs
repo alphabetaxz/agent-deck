@@ -21,11 +21,18 @@ test('old browser pairs, renders agents together, and retries network failure wi
  assert.equal(w.document.getElementById('pair-code').value,'12345678');
  reply(401,{error:'unauthorized'});
  assert.notEqual(w.document.getElementById('pair-screen').style.display,'none');
+ assert.equal(w.document.getElementById('cards').style.display,'none');
+ w.document.getElementById('fullscreen').click();assert.match(w.document.getElementById('notice').textContent,/不支持全屏/);
+ w.document.getElementById('wake').click();assert.match(w.document.getElementById('notice').textContent,/不支持保持亮屏/);
  w.document.getElementById('pair-form').dispatchEvent(new w.Event('submit',{cancelable:true}));
+ assert.equal(w.document.querySelector('#pair-form button').textContent,'连接中…');
  assert.equal(requests[0].path,'/api/pair');assert.equal(JSON.parse(requests[0].body).code,'12345678');
  reply(200,{id:'device'});
  const data={cards:[{pluginId:'agents',subtitle:'pi',pluginStatus:'running',status:'running'},{pluginId:'agents',subtitle:'Codex',pluginStatus:'running',status:'waiting'},{pluginId:'todo',title:'待办',type:'list',pluginStatus:'running',items:[{title:'<script>private</script>',done:false}]}],displayPlugins:[{id:'agents',status:'running'},{id:'todo',status:'running'},{id:'clock',name:'时钟',status:'starting'}]};
  reply(200,data);
+ assert.notEqual(w.document.getElementById('cards').style.display,'none');
+ w.document.getElementById('fullscreen').click();
+ timers.pop()();reply(200,data);assert.match(w.document.getElementById('notice').textContent,/不支持全屏/);
  assert.equal(w.document.querySelectorAll('.card').length,3);
  assert.equal(w.document.querySelectorAll('.agent-overview').length,1);
  assert.equal(w.document.querySelectorAll('.agent-state').length,2);
@@ -38,5 +45,24 @@ test('old browser pairs, renders agents together, and retries network failure wi
  assert.equal(w.document.querySelectorAll('.card').length,3);
  timers.pop()();reply(401,{error:'revoked'});
  assert.equal(w.document.querySelectorAll('.card').length,0);
+ dom.window.close();
+});
+
+test('prefixed fullscreen supports entry and exit, wake lock failures show feedback',()=>{
+ const dom=new JSDOM(source('display.html'),{url:'http://phone.test/display',runScripts:'outside-only'}), w=dom.window;
+ w.XMLHttpRequest=function(){this.open=this.setRequestHeader=this.send=function(){};};
+ w.eval(source('display-shared.js'));w.eval(source('display.js'));
+ var entered=0,exited=0;
+ w.document.documentElement.webkitRequestFullScreen=()=>{entered++;w.document.webkitCurrentFullScreenElement=w.document.documentElement;w.document.dispatchEvent(new w.Event('webkitfullscreenchange'));};
+ w.document.webkitCancelFullScreen=()=>{exited++;w.document.webkitCurrentFullScreenElement=null;w.document.dispatchEvent(new w.Event('webkitfullscreenchange'));};
+ w.document.getElementById('fullscreen').click();assert.equal(entered,1);assert.equal(w.document.getElementById('fullscreen').textContent,'退出全屏');
+ w.document.getElementById('fullscreen').click();assert.equal(exited,1);assert.equal(w.document.getElementById('fullscreen').textContent,'全屏');
+ w.navigator.wakeLock={request(){throw new Error('blocked');}};
+ w.document.getElementById('wake').click();assert.equal(w.document.getElementById('wake').disabled,false);assert.match(w.document.getElementById('notice').textContent,/无法保持亮屏/);
+ var releaseHandler, released=0;
+ const lock={addEventListener(name,fn){releaseHandler=fn;},release(){released++;releaseHandler();}};
+ w.navigator.wakeLock={request(){return {then(resolve){resolve(lock);}};}};
+ w.document.getElementById('wake').click();assert.equal(w.document.getElementById('wake').textContent,'关闭亮屏');
+ w.document.getElementById('wake').click();assert.equal(released,1);assert.equal(w.document.getElementById('wake').textContent,'保持亮屏');
  dom.window.close();
 });
