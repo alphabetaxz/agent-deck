@@ -141,6 +141,7 @@ test('phone network advertises Mac IP and decodable QR, isolates management, and
  assert.equal((await fetch(lan+'/api/hooks',{method:'POST',headers:{Authorization:'Bearer '+deck.runtime.hookToken}})).status,403);
  assert.equal((await fetch(lan+'/api/snapshot',{headers:{Cookie:cookie}})).status,401);
  const response=await fetch(lan+'/api/pair',{method:'POST',headers:{Origin:lan,'Content-Type':'application/json'},body:JSON.stringify({code:pair.code,name:'QR test phone'})});assert.equal(response.status,200);const phoneCookie=response.headers.get('set-cookie').split(';')[0];
+ for(const asset of ['/display','/display.js','/display-shared.js','/display.css'])assert.equal((await fetch(lan+asset)).status,200);
  const snapshot=await (await fetch(lan+'/api/snapshot',{headers:{Cookie:phoneCookie}})).json();assert.equal(snapshot.plugins,undefined);assert.equal(snapshot.integrations,undefined);
  assert.equal((await fetch(lan+'/api/network',{method:'POST',headers:{Cookie:phoneCookie,Origin:lan,'Content-Type':'application/json'},body:'{"enabled":false}'})).status,403);
  assert.equal((await request('/api/network',{enabled:false})).status,200);assert.equal((await (await request('/api/snapshot')).json()).network.enabled,false);await assert.rejects(fetch(lan+'/display'));

@@ -65,7 +65,7 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
     res.setHeader('Cache-Control','no-store');
     try {
       const url=new URL(req.url,'http://localhost'), path=url.pathname;
-      if(deviceOnly&&!['/','/display','/display-model.mjs','/app.js','/style.css','/api/pair','/api/snapshot','/api/events'].includes(path))return json(res,403,{error:'此端口仅用于手机显示'});
+      if(deviceOnly&&!['/','/display','/display-model.mjs','/display-shared.js','/display.js','/display.css','/app.js','/style.css','/api/pair','/api/snapshot','/api/events'].includes(path))return json(res,403,{error:'此端口仅用于手机显示'});
       if (path==='/admin/login' && req.method==='GET') {
         if (!equal(url.searchParams.get('code'),login)) return json(res,401,{error:'登录链接已失效，请重新启动 Mac App'});
         login=token();runtime.adminURL=base+'/admin/login?code='+login;
@@ -151,7 +151,7 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
         }
         return json(res,404,{error:'Unknown endpoint'});
       }
-      const files={'/':'display.html','/display':'display.html','/admin':'admin.html','/display-model.mjs':'display-model.mjs','/app.js':'app.js','/style.css':'style.css'};
+      const files={'/':'display.html','/display':'display.html','/admin':'admin.html','/display-model.mjs':'display-model.mjs','/display-shared.js':'display-shared.js','/display.js':'display.js','/display.css':'display.css','/app.js':'app.js','/style.css':'style.css'};
       if (req.method!=='GET' || !files[path]) return json(res,404,{error:'Not found'});
       if (path==='/admin'&&!isAdmin) return json(res,401,{error:'请通过 Mac App 或启动时的管理链接打开'});
       const content=readFileSync(join(root,'web',files[path]));
