@@ -63,12 +63,19 @@
     var top = 70 + (get('notice').style.display === 'none' ? 0 : get('notice').offsetHeight + 8);
     box.style.top = top + 'px';
     var width = box.clientWidth, available = Math.max(0, height - top - 38), count = box.children.length, cols = width >= 600 && count > 1 ? 2 : 1, rows = Math.ceil(count / cols) || 1;
+    var landscapeAgents = width >= 600 && height <= 500 && count > 1 && box.children[0].className.indexOf('agent-overview') !== -1;
     var gap = 12, w = Math.max(0, (width - gap * (cols - 1)) / cols), h = Math.max(0, (available - gap * (rows - 1)) / rows), i, j, card, list, more, visible;
     for (i = 0; i < count; i++) {
       card = box.children[i]; card.style.left = (i % cols) * (w + gap) + 'px'; card.style.top = Math.floor(i / cols) * (h + gap) + 'px'; card.style.width = w + 'px'; card.style.height = h + 'px';
+      if (landscapeAgents) {
+        var cellHeight = i === 0 ? available : Math.max(0, (available - gap * (count - 2)) / (count - 1));
+        card.style.left = i === 0 ? '0px' : (w + gap) + 'px';
+        card.style.top = i === 0 ? '0px' : (i - 1) * (cellHeight + gap) + 'px';
+        card.style.height = cellHeight + 'px';
+      }
       list = card.querySelector('.checklist'); more = card.querySelector('.list-more');
       if (list) {
-        visible = Math.max(0, Math.floor((h - list.offsetTop - 36) / 34));
+        visible = Math.max(0, Math.floor((parseFloat(card.style.height) - list.offsetTop - 36) / 34));
         for (j = 0; j < list.children.length; j++) show(list.children[j], j < visible);
         more.textContent = '还有 ' + (list.children.length - visible) + ' 项'; show(more, visible < list.children.length);
       }

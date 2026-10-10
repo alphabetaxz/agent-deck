@@ -62,3 +62,14 @@ body[data-mode="display"]{background:#101722}.display-shell>header{padding:0 2px
 .status.unknown,#cards .status.unknown{color:#d2b2ff;background:#403052;border:1px solid #d2b2ff;}
 .agent-state.state-unknown{border-left:4px solid #d2b2ff;background:#403052;padding-left:10px;border-radius:8px;}
 .agent-state.state-unknown .agent-icon{background:#d2b2ff;color:#403052;}
+
+.agent-state{flex-shrink:0;min-height:40px;}
+.agent-state>.status{flex-shrink:0;line-height:16px;}
+.agent-identity{flex:1;min-width:0;}
+
+/* Soft sparkle only while working; prefixed animation supports old WebKit. */
+.status.running:before,#cards .status.running:before{content:"";display:inline-block;width:6px;height:6px;margin:0 6px 1px 0;border-radius:50%;background:#a9d9ff;-webkit-animation:deck-sparkle 1.4s ease-in-out infinite;animation:deck-sparkle 1.4s ease-in-out infinite;}
+.agent-state.state-running .agent-icon{-webkit-animation:deck-sparkle 1.4s ease-in-out infinite;animation:deck-sparkle 1.4s ease-in-out infinite;}
+@-webkit-keyframes deck-sparkle{0%,100%{opacity:1;box-shadow:0 0 2px #8fc8ff}50%{opacity:.65;box-shadow:0 0 10px #8fc8ff}}
+@keyframes deck-sparkle{0%,100%{opacity:1;box-shadow:0 0 2px #8fc8ff}50%{opacity:.65;box-shadow:0 0 10px #8fc8ff}}
+@media(prefers-reduced-motion:reduce){.status.running:before,#cards .status.running:before,.agent-state.state-running .agent-icon{-webkit-animation:none;animation:none}}

@@ -20,3 +20,17 @@
 .status.unknown,#cards .status.unknown{color:#d2b2ff;background:#403052;border:1px solid #d2b2ff;}
 .agent-state.state-unknown{border-left:4px solid #d2b2ff;background:#403052;padding-left:10px;border-radius:8px;}
 .agent-state.state-unknown .agent-icon{background:#d2b2ff;color:#403052;}
+
+/* Each badge fits inside its own row, including older WebKit. */
+.agent-state{height:42px;line-height:32px;margin-bottom:7px;padding-top:5px;padding-bottom:5px;padding-right:116px;}
+.agent-state>.status{top:9px;right:8px;line-height:16px;padding:3px 7px;font-size:11px;}
+.agent-identity{line-height:30px;}
+.card-top>.status{line-height:16px;}
+@media(max-height:500px){.card{padding:12px}.card-top{margin-bottom:8px}.agent-state{height:36px;line-height:26px;margin-bottom:5px;padding-top:4px;padding-bottom:4px}.agent-state>.status{top:6px}.agent-identity{line-height:28px}.agent-icon{width:25px;height:25px;line-height:25px;margin-right:7px}}
+
+/* Soft sparkle only while working; prefixed animation supports old WebKit. */
+.status.running:before,#cards .status.running:before{content:"";display:inline-block;width:6px;height:6px;margin:0 6px 1px 0;border-radius:50%;background:#a9d9ff;-webkit-animation:deck-sparkle 1.4s ease-in-out infinite;animation:deck-sparkle 1.4s ease-in-out infinite;}
+.agent-state.state-running .agent-icon{-webkit-animation:deck-sparkle 1.4s ease-in-out infinite;animation:deck-sparkle 1.4s ease-in-out infinite;}
+@-webkit-keyframes deck-sparkle{0%,100%{opacity:1;box-shadow:0 0 2px #8fc8ff}50%{opacity:.65;box-shadow:0 0 10px #8fc8ff}}
+@keyframes deck-sparkle{0%,100%{opacity:1;box-shadow:0 0 2px #8fc8ff}50%{opacity:.65;box-shadow:0 0 10px #8fc8ff}}
+@media(prefers-reduced-motion:reduce){.status.running:before,#cards .status.running:before,.agent-state.state-running .agent-icon{-webkit-animation:none;animation:none}}
