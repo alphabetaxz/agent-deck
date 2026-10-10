@@ -6,7 +6,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 const execute=promisify(execFile);
 const names={claude:'Claude Code',pi:'pi',codex:'Codex CLI'};
-const events={claude:['SessionStart','SessionEnd','UserPromptSubmit','PermissionRequest','PostToolUse','PostToolUseFailure','Stop','StopFailure','Notification'],codex:['SessionStart','SessionEnd','UserPromptSubmit','PermissionRequest','PostToolUse','Stop']};
+const events={claude:['SessionStart','SessionEnd','UserPromptSubmit','PreToolUse','SubagentStart','SubagentStop','PermissionRequest','PostToolUse','PostToolUseFailure','Stop','StopFailure','Notification'],codex:['SessionStart','SessionEnd','UserPromptSubmit','PermissionRequest','PostToolUse','Stop']};
 const quote=s=>"'"+s.replaceAll("'","'\\''")+"'";
 const hash=s=>createHash('sha256').update(s??'').digest('hex');
 function read(path) {try {if(lstatSync(path).isSymbolicLink())throw new Error('接入文件是符号链接，已保留原文件');return readFileSync(path,'utf8');}catch(e){if(e.code==='ENOENT')return null;throw e;}}

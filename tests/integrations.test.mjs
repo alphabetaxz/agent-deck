@@ -9,7 +9,7 @@ async function fixture(t){const home=mkdtempSync(join(tmpdir(),'deck-install-'))
 function write(path,text){mkdirSync(resolve(path,'..'),{recursive:true});writeFileSync(path,text);}
 test('Claude install is idempotent, binds data directory, preserves other hooks and removes only owned hooks',async t=>{
  const m=await fixture(t);write(m.paths.claude,JSON.stringify({custom:{keep:true},hooks:{Stop:[{matcher:'',hooks:[{type:'command',command:'other-hook'}]}]}}));
- await m.change('claude','install');await m.change('claude','install');let config=JSON.parse(readFileSync(m.paths.claude));assert.deepEqual(config.custom,{keep:true});assert.equal(config.hooks.Stop.length,2);assert.match(m.manifest('claude').command,/--data/);assert.equal(m.status()[0].state,'configured');m.recordEvent('claude');assert.equal(m.status()[0].state,'connected');
+ await m.change('claude','install');await m.change('claude','install');let config=JSON.parse(readFileSync(m.paths.claude));for(const name of ['PreToolUse','SubagentStart','SubagentStop'])assert.equal(config.hooks[name].length,1);assert.deepEqual(config.custom,{keep:true});assert.equal(config.hooks.Stop.length,2);assert.match(m.manifest('claude').command,/--data/);assert.equal(m.status()[0].state,'configured');m.recordEvent('claude');assert.equal(m.status()[0].state,'connected');
  await m.change('claude','remove');config=JSON.parse(readFileSync(m.paths.claude));assert.equal(config.hooks.Stop.length,1);assert.equal(config.hooks.Stop[0].hooks[0].command,'other-hook');assert.equal(m.status()[0].hasConfig,false);assert.ok(existsSync(join(m.dataDir,'backups')));
 });
 test('pi auto-discovery install embeds location; modified extensions are preserved',async t=>{
