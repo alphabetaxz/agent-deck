@@ -132,14 +132,15 @@ export async function createDeck({root,dataDir,host='127.0.0.1',port=43120,cert,
           store.set('core','deviceNetworkEnabled',data.enabled);publish();return json(res,200,networkStatus());
         }
         if (path==='/api/pair/create' && req.method==='POST') {
-          pair={code:String(randomInt(10000000,100000000)),expires:Date.now()+120000};
+          const nextPair={code:String(randomInt(10000000,100000000)),expires:Date.now()+120000};
           const addresses=lanAddresses();
           const address=data.address??addresses[0]?.address;
           if(data.address&&!addresses.some(x=>x.address===data.address))throw new Error('所选网络地址已失效，请重新生成');
           const displayURL=deviceServer&&address?`${tls?'https':'http'}://${address}:${deviceServer.address().port}/display`:null;
-          const qrURL=displayURL?displayURL+'#pair='+pair.code:null;
+          const qrURL=displayURL?displayURL+'#pair='+nextPair.code:null;
           const qr=qrURL?await QRCode.toDataURL(qrURL,{width:280,margin:4,errorCorrectionLevel:'M'}):null;
-          return json(res,200,{...pair,url:displayURL,qr,lan:!!displayURL,encrypted:tls,previewURL:base+'/display'});
+          pair=nextPair;
+          return json(res,200,{...nextPair,url:displayURL,qr,lan:!!displayURL,encrypted:tls,previewURL:base+'/display'});
         }
         if (path==='/api/devices/revoke' && req.method==='POST') {
           devices=devices.filter(d=>d.id!==data.id);delete layouts[data.id];store.set('core','devices',devices);store.set('core','layouts',layouts);publish();return json(res,200,{ok:true});

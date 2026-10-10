@@ -6,8 +6,11 @@ const statuses={idle:'空闲',running:'工作中',waiting:'等待你处理',comp
 function el(tag,text,className) {const node=document.createElement(tag);if(text!=null)node.textContent=text;if(className)node.className=className;return node;}
 function notice(message) {$('notice').hidden=!message;$('notice').textContent=message??'';}
 async function api(path,data) {
-  const response=await fetch(path,{method:data===undefined?'GET':'POST',headers:data===undefined?{}:{'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)});
-  const result=await response.json();if(!response.ok){const e=new Error(result.error??'操作失败');e.status=response.status;throw e;}return result;
+  const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),15000);
+  try {
+    const response=await fetch(path,{method:data===undefined?'GET':'POST',headers:data===undefined?{}:{'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data),signal:controller.signal});
+    const result=await response.json();if(!response.ok){const e=new Error(result.error??'操作失败');e.status=response.status;throw e;}return result;
+  }catch(e){if(controller.signal.aborted)throw new Error('请求超时，请检查 App 连接后重试');throw e;}finally{clearTimeout(timeout);}
 }
 function button(text,action,className='secondary') {const b=el('button',text,className);b.type='button';b.addEventListener('click',async()=>{b.disabled=true;try{await action();notice('');}catch(e){notice(e.message);}finally{b.disabled=false;}});return b;}
 function renderCards(rawCards) {
@@ -92,13 +95,14 @@ function renderIntegrations() {
     container.append(panel);
   }
 }
-let networkFingerprint='',pairTimer=null;
+let networkFingerprint='',pairTimer=null,pairBusy=false;
+function updatePairButton(){const b=$('pair-button');b.disabled=pairBusy||!state.network.addresses.length;b.textContent=pairBusy?'生成中…':state.network.enabled?'生成配对二维码':'开启连接并生成二维码';b.classList.toggle('is-loading',pairBusy);}
 function renderNetwork(){
   const network=state.network;const fingerprint=JSON.stringify(network);if(fingerprint===networkFingerprint)return;networkFingerprint=fingerprint;
   $('network-toggle').textContent=network.enabled?'关闭手机连接':'开启手机连接';
   const select=$('network-address'),selected=select.value;select.replaceChildren();for(const item of network.addresses){const option=el('option',item.address+' · '+item.name);option.value=item.address;select.append(option);}if(network.addresses.some(x=>x.address===selected))select.value=selected;
   $('network-hint').textContent=network.enabled?(network.encrypted?'手机连接已开启 · HTTPS':'手机连接已开启 · 仅在可信局域网使用，HTTP 传输未加密'):'开启后，手机可通过局域网连接；Mac 管理界面仅在本机开放。';
-  $('pair-button').disabled=!network.enabled||!network.addresses.length;
+  updatePairButton();
 }
 function renderDevices() {
   const fingerprint=JSON.stringify(state.devices);if(fingerprint!==deviceFingerprint){deviceFingerprint=fingerprint;const container=$('device-list');container.replaceChildren();
@@ -135,10 +139,10 @@ if(mode==='admin') {
   $('integration-refresh').addEventListener('click',async()=>{const b=$('integration-refresh');b.disabled=true;b.textContent='检测中…';try{await api('/api/integrations/refresh',{});}catch(e){notice(e.message);}finally{b.disabled=false;b.textContent='重新检测';}});
   $('todo-form').addEventListener('submit',async e=>{e.preventDefault();const input=$('todo-title');try{await todoAction('add',{title:input.value});input.value='';notice('');}catch(e){notice(e.message);}});
   $('network-toggle').addEventListener('click',async()=>{const b=$('network-toggle');b.disabled=true;try{await api('/api/network',{enabled:!state.network.enabled});$('pair-info').hidden=true;}catch(e){notice(e.message);}finally{b.disabled=false;}});
-  $('pair-button').addEventListener('click',async()=>{const b=$('pair-button');b.disabled=true;try{const pair=await api('/api/pair/create',{address:$('network-address').value||undefined});const panel=$('pair-info');panel.replaceChildren();
+  $('pair-button').addEventListener('click',async()=>{if(pairBusy)return;pairBusy=true;updatePairButton();const panel=$('pair-info');clearInterval(pairTimer);panel.replaceChildren(el('p','正在开启手机连接并生成二维码…'));panel.hidden=false;try{if(!state.network.enabled){state.network=await api('/api/network',{enabled:true});renderNetwork();}const pair=await api('/api/pair/create',{address:$('network-address').value||undefined});panel.replaceChildren();
     if(!pair.lan){panel.append(el('p','请先开启手机连接，并连接 Wi-Fi 或有线网络。'));}
     else{const image=document.createElement('img');image.src=pair.qr;image.alt='手机配对二维码';image.width=280;image.height=280;panel.append(image,el('p','手机扫码，确认连接即可 · 2 分钟有效'),el('strong',pair.code),el('p','也可在手机浏览器打开：'+pair.url),el('p','手机和 Mac 需连接同一局域网。','muted'));const expiration=el('p',null,'muted');panel.append(expiration);clearInterval(pairTimer);const tick=()=>{const seconds=Math.ceil((pair.expires-Date.now())/1000);expiration.textContent=seconds>0?'剩余 '+seconds+' 秒':'配对码已过期，请重新生成';if(seconds<=0){image.hidden=true;clearInterval(pairTimer);}};tick();pairTimer=setInterval(tick,1000);}
-    panel.hidden=false;}catch(e){notice(e.message);}finally{b.disabled=false;}});
+    panel.hidden=false;notice('');}catch(e){panel.replaceChildren(el('p',e.message));panel.hidden=false;}finally{pairBusy=false;updatePairButton();}});
   $('layout-device').addEventListener('change',renderLayout);
 } else {
   const code=new URLSearchParams(location.hash.slice(1)).get('pair');if(/^[0-9]{8}$/.test(code??'')){$('pair-code').value=code;history.replaceState(null,'',location.pathname);}

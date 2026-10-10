@@ -73,3 +73,5 @@ body[data-mode="display"]{background:#101722}.display-shell>header{padding:0 2px
 @-webkit-keyframes deck-sparkle{0%,100%{opacity:1;box-shadow:0 0 2px #8fc8ff}50%{opacity:.65;box-shadow:0 0 10px #8fc8ff}}
 @keyframes deck-sparkle{0%,100%{opacity:1;box-shadow:0 0 2px #8fc8ff}50%{opacity:.65;box-shadow:0 0 10px #8fc8ff}}
 @media(prefers-reduced-motion:reduce){.status.running:before,#cards .status.running:before,.agent-state.state-running .agent-icon{-webkit-animation:none;animation:none}}
+
+button:disabled{cursor:not-allowed}button.is-loading:disabled{cursor:wait}
