@@ -108,7 +108,7 @@
   };
   function fullscreenChanged() {
     get('fullscreen').textContent = document.fullscreenElement || document.webkitFullscreenElement || document.webkitCurrentFullScreenElement ? '退出全屏' : '全屏';
-    notice(get('fullscreen').textContent === '退出全屏' ? '已进入全屏' : '已退出全屏');
+    notice('');
   }
   document.addEventListener('fullscreenchange', fullscreenChanged);
   document.addEventListener('webkitfullscreenchange', fullscreenChanged);
@@ -119,7 +119,7 @@
     var node = active ? document : document.documentElement;
     var fn = active ? document.exitFullscreen || document.webkitExitFullscreen || document.webkitCancelFullScreen : node.requestFullscreen || node.webkitRequestFullscreen || node.webkitRequestFullScreen;
     if (!fn) { notice('当前浏览器不支持全屏，请使用浏览器的全屏选项。'); return; }
-    notice(active ? '正在退出全屏…' : '正在进入全屏…');
+    notice('');
     try { var result = fn.call(node); if (result && result['catch']) result['catch'](function () { notice('无法进入全屏，请检查浏览器设置。'); }); } catch (e) { notice('无法进入全屏，请检查浏览器设置。'); }
   };
   function acquireWake() {
