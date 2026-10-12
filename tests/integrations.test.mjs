@@ -9,7 +9,7 @@ async function fixture(t){const home=mkdtempSync(join(tmpdir(),'deck-install-'))
 function write(path,text){mkdirSync(resolve(path,'..'),{recursive:true});writeFileSync(path,text);}
 test('Claude install is idempotent, binds data directory, preserves other hooks and removes only owned hooks',async t=>{
  const m=await fixture(t);write(m.paths.claude,JSON.stringify({custom:{keep:true},hooks:{Stop:[{matcher:'',hooks:[{type:'command',command:'other-hook'}]}]}}));
- await m.change('claude','install');await m.change('claude','install');let config=JSON.parse(readFileSync(m.paths.claude));for(const name of ['PreToolUse','SubagentStart','SubagentStop'])assert.equal(config.hooks[name].length,1);assert.deepEqual(config.custom,{keep:true});assert.equal(config.hooks.Stop.length,2);assert.match(m.manifest('claude').command,/--data/);assert.equal(m.status()[0].state,'configured');m.recordEvent('claude');assert.equal(m.status()[0].state,'connected');
+ await m.change('claude','install');await m.change('claude','install');let config=JSON.parse(readFileSync(m.paths.claude));for(const name of ['PreToolUse','SubagentStart','SubagentStop'])assert.equal(config.hooks[name].length,1);assert.equal(config.statusLine,undefined);assert.deepEqual(config.custom,{keep:true});assert.equal(config.hooks.Stop.length,2);assert.match(m.manifest('claude').command,/--data/);assert.equal(m.status()[0].state,'configured');m.recordEvent('claude');assert.equal(m.status()[0].state,'connected');
  await m.change('claude','remove');config=JSON.parse(readFileSync(m.paths.claude));assert.equal(config.hooks.Stop.length,1);assert.equal(config.hooks.Stop[0].hooks[0].command,'other-hook');assert.equal(m.status()[0].hasConfig,false);assert.ok(existsSync(join(m.dataDir,'backups')));
 });
 test('pi auto-discovery install embeds location; modified extensions are preserved',async t=>{
@@ -42,10 +42,15 @@ test('pi preserves foreign or edited extensions when installation records are mi
   write(next.paths.pi,text);await assert.rejects(next.change('pi','install'),/已保留/);assert.equal(readFileSync(next.paths.pi,'utf8'),text);assert.equal(existsSync(next.manifestPath('pi')),false);
  }
 });
-test('Claude usage observer preserves, reinstalls and restores an existing statusline',async t=>{
+test('Claude integration leaves native statusline untouched across install and removal',async t=>{
  const m=await fixture(t);const original={type:'command',command:'printf "custom status"',padding:2};write(m.paths.claude,JSON.stringify({statusLine:original}));
- await m.change('claude','install');const installed=JSON.parse(readFileSync(m.paths.claude));assert.notEqual(installed.statusLine.command,original.command);assert.equal(installed.statusLine.padding,2);
- await m.change('claude','install');assert.deepEqual(m.manifest('claude').originalStatusLine,original);assert.equal(m.status()[0].installed,true);
+ await m.change('claude','install');await m.change('claude','install');assert.deepEqual(JSON.parse(readFileSync(m.paths.claude)).statusLine,original);assert.equal(m.manifest('claude').statusLineCommand,undefined);assert.equal(m.status()[0].installed,true);
  await m.change('claude','remove');assert.deepEqual(JSON.parse(readFileSync(m.paths.claude)).statusLine,original);
- await m.change('claude','install');write(m.paths.claude,JSON.stringify({...JSON.parse(readFileSync(m.paths.claude)),statusLine:{type:'command',command:'new user status'}}));await m.change('claude','remove');assert.equal(JSON.parse(readFileSync(m.paths.claude)).statusLine.command,'new user status');
+});
+test('old Claude wrapper migrates back to saved statusline without overwriting user changes',async t=>{
+ const m=await fixture(t);const original={type:'command',command:'native-status',padding:1};await m.change('claude','install');
+ const old={...m.manifest('claude'),statusLineCommand:'old-deck-wrapper',originalStatusLine:original};write(m.manifestPath('claude'),JSON.stringify(old));write(m.paths.claude,JSON.stringify({...JSON.parse(readFileSync(m.paths.claude)),statusLine:{type:'command',command:old.statusLineCommand}}));
+ await m.change('claude','install');assert.deepEqual(JSON.parse(readFileSync(m.paths.claude)).statusLine,original);
+ write(m.manifestPath('claude'),JSON.stringify(old));const user={type:'command',command:'new user status'};write(m.paths.claude,JSON.stringify({...JSON.parse(readFileSync(m.paths.claude)),statusLine:user}));await m.change('claude','install');assert.deepEqual(JSON.parse(readFileSync(m.paths.claude)).statusLine,user);
+ write(m.manifestPath('claude'),JSON.stringify({...old,originalStatusLine:null}));write(m.paths.claude,JSON.stringify({...JSON.parse(readFileSync(m.paths.claude)),statusLine:{type:'command',command:old.statusLineCommand}}));await m.change('claude','install');assert.equal(JSON.parse(readFileSync(m.paths.claude)).statusLine,undefined);
 });

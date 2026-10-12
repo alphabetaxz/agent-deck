@@ -125,7 +125,7 @@ export class IntegrationManager {
             const config=objectJSON(read(this.paths[source]),'Agent 配置');
             installed=events[source].every(event=>(config.hooks?.[event]??[]).some(g=>g.hooks?.some(h=>h.command===manifest.command)));
             installed=installed&&hash(read(join(this.directory,'hook.mjs')))===manifest.helperHash;
-            if(source==='claude')installed=installed&&config.statusLine?.command===manifest.statusLineCommand&&!!manifest.statusLineCommand&&hash(read(join(this.directory,'claude-statusline.mjs')))===manifest.statusLineHash&&hash(read(join(this.directory,'usage.mjs')))===manifest.usageHash;
+            if(source==='claude')installed=installed&&!manifest.statusLineCommand&&hash(read(join(this.directory,'usage.mjs')))===manifest.usageHash;
             if(source==='codex') {
               const toml=read(this.codexConfig)??'';
               if(/^\s*(hooks|codex_hooks)\s*=\s*false\s*(?:#.*)?$/m.test(toml))installed=false;
@@ -190,16 +190,14 @@ export class IntegrationManager {
           if(source==='claude'){
             const settings=JSON.parse(updated);
             const owned=!!manifest.statusLineCommand&&settings.statusLine?.command===manifest.statusLineCommand;
-            const original=owned?manifest.originalStatusLine:settings.statusLine;
-            if(original!=null&&(!original||original.type!=='command'||typeof original.command!=='string'))throw new Error('当前 Claude 状态栏类型不支持，已保留原配置');
-            const statusLinePath=join(this.directory,'claude-statusline.mjs');
-            next.statusLineCommand=[process.execPath,statusLinePath].map(quote).join(' ');
-            next.originalStatusLine=original??null;
-            settings.statusLine={...(original??{}),type:'command',command:next.statusLineCommand};
+            // Migrate our old wrapper only while it still owns the setting.
+            // A statusline changed by /statusline or another tool belongs to the user.
+            if(owned){if(manifest.originalStatusLine)settings.statusLine=manifest.originalStatusLine;else delete settings.statusLine;}
+            for(const key of ['statusLineCommand','originalStatusLine','statusLineHash'])delete next[key];
             updated=JSON.stringify(settings,null,2)+'\n';
-            for(const file of ['claude-statusline.mjs','usage.mjs']){const text=readFileSync(join(this.root,'integrations',file),'utf8');add(join(this.directory,file),text,file);next[file==='usage.mjs'?'usageHash':'statusLineHash']=hash(text);}
-            add(join(this.directory,'claude-statusline-config.json'),JSON.stringify({original:next.originalStatusLine,dataDir:this.dataDir},null,2)+'\n','claude-statusline-config.json');
           }
+          const usage=readFileSync(join(this.root,'integrations/usage.mjs'),'utf8');
+          add(join(this.directory,'usage.mjs'),usage,'usage.mjs');next.usageHash=hash(usage);
           add(target,updated,'hooks.json');
           add(helperPath,helper,'hook.mjs');next.command=command;next.helperHash=hash(helper);
           if(source==='codex') {

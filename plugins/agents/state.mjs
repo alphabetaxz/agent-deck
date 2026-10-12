@@ -3,7 +3,7 @@ import { basename } from 'node:path';
 const sources=new Set(['claude','codex','pi']);
 const events=new Set(['SessionStart','SessionEnd','UserPromptSubmit','PreToolUse','PostToolUse','PostToolUseFailure','PermissionRequest','Notification','Stop','StopFailure','Heartbeat','Interrupt','SubagentStart','SubagentStop','Usage']);
 const active=s=>Object.keys(s.tools??{}).length>0||Object.keys(s.subagents??{}).length>0;
-export function resetRestoredSessions(sessions){for(const s of Object.values(sessions)){s.lastSeen=0;s.tools={};s.subagents={};s.mainStopped=false;}}
+export function resetRestoredSessions(sessions){for(const s of Object.values(sessions)){s.lastSeen=0;s.tools={};s.subagents={};s.mainStopped=false;if(s.source==='claude'&&s.usage){s.usage={updatedAt:s.usage.updatedAt,sessionScope:'main',sessionTokens:s.usage.sessionTokens,windows:[]};}}}
 const clip=v=>typeof v==='string'?v.slice(0,500):'';
 export function applyEvent(sessions, event, now=Date.now()) {
   if (!event || !sources.has(event.source) || !events.has(event.hook_event_name) || typeof event.session_id!=='string' || !event.session_id || event.session_id.length>120) throw new Error('Invalid agent event');

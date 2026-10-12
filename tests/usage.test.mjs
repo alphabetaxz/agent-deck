@@ -31,14 +31,13 @@ test('usage events preserve waiting/completed state and ignore older usage snaps
  assert.equal(agentCards(sessions,400)[0].status,'completed');
  assert.throws(()=>validateCards([{...agentCards(sessions,400)[0],usage:{updatedAt:100,windows:[],sessionTokens:'bad'}}],{cardTypes:['status']}),/usage/);
 });
-test('installed Claude statusline forwards only numeric usage and preserves custom stdout',async t=>{
+test('Claude hook collects main-session tokens without emitting statusline output',async t=>{
  const {mkdtempSync,writeFileSync,copyFileSync,rmSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join,resolve}=await import('node:path');const {createServer}=await import('node:http');const {spawn}=await import('node:child_process');
  const dir=mkdtempSync(join(tmpdir(),'deck-statusline-'));const received=[];const server=createServer(async(req,res)=>{let body='';for await(const chunk of req)body+=chunk;received.push(JSON.parse(body));res.end('{}');});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(async()=>{await new Promise(resolve=>server.close(resolve));rmSync(dir,{recursive:true,force:true});});
- for(const file of ['claude-statusline.mjs','usage.mjs','hook.mjs'])copyFileSync(resolve('integrations',file),join(dir,file));
+ for(const file of ['usage.mjs','hook.mjs'])copyFileSync(resolve('integrations',file),join(dir,file));
  writeFileSync(join(dir,'runtime.json'),JSON.stringify({hookURL:`http://127.0.0.1:${server.address().port}/api/hooks`,hookToken:'test-only'}));
- writeFileSync(join(dir,'claude-statusline-config.json'),JSON.stringify({dataDir:dir,original:{type:'command',command:'printf "unchanged custom output"'}}));
  const transcript=join(dir,'session.jsonl');writeFileSync(transcript,JSON.stringify({type:'assistant',message:{id:'one',usage:{input_tokens:10,output_tokens:5},content:'PRIVATE'}})+'\n');
- const payload={session_id:'test',cwd:dir,transcript_path:transcript,cost:{total_cost_usd:.01},rate_limits:{five_hour:{used_percentage:20,resets_at:Math.floor(Date.now()/1000)+3600}},prompt:'PRIVATE'};
- const child=spawn(process.execPath,[join(dir,'claude-statusline.mjs')],{stdio:['pipe','pipe','pipe']});let output='';child.stdout.on('data',c=>output+=c);child.stdin.end(JSON.stringify(payload));const code=await new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',resolve);});
- assert.equal(code,0);assert.equal(output,'unchanged custom output');assert.equal(received.length,1);assert.equal(received[0].usage.sessionTokens,15);assert.equal(received[0].hook_event_name,'Usage');assert.equal(JSON.stringify(received).includes('PRIVATE'),false);
+ const payload={hook_event_name:'Stop',session_id:'test',cwd:dir,transcript_path:transcript,cost:{total_cost_usd:.01},rate_limits:{five_hour:{used_percentage:20,resets_at:Math.floor(Date.now()/1000)+3600}},prompt:'PRIVATE'};
+ const child=spawn(process.execPath,[join(dir,'hook.mjs'),'claude','--data',dir],{stdio:['pipe','pipe','pipe']});let output='';child.stdout.on('data',c=>output+=c);child.stdin.end(JSON.stringify(payload));const code=await new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',resolve);});
+ assert.equal(code,0);assert.equal(output,'');assert.equal(received.length,1);assert.equal(received[0].usage.sessionTokens,15);assert.equal(received[0].hook_event_name,'Stop');assert.equal(JSON.stringify(received[0].usage).includes('PRIVATE'),false);
 });
