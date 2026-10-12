@@ -16,6 +16,26 @@
     }
     return [(usage && usage.sessionLabel || '会话') + ' ' + session, (usage && now - usage.updatedAt > 300000 ? '上次额度 ' : '') + (cycles.length ? cycles.join(' / ') : '周期用量未提供')];
   };
+  root.AgentDeckUsageElement = function (usage, doc) {
+    var box = doc.createElement('div'), session = doc.createElement('div'), quotas = doc.createElement('div'), now = Date.now(), i, w, minutes, reset, label, tile, heading, track, fill;
+    function node(tag, text, cls) {var n = doc.createElement(tag); n.className = cls; if (text != null) n.textContent = text; return n;}
+    box.className = 'agent-usage'; session.className = 'usage-session'; quotas.className = 'usage-quotas';
+    session.appendChild(node('span', usage && usage.sessionLabel || '会话', 'usage-label'));
+    var value = usage && usage.sessionTokens != null ? compact(usage.sessionTokens) : '—';
+    var amount = node('div', null, 'usage-amount'); amount.appendChild(node('strong', value, 'usage-number')); amount.appendChild(node('span', value === '—' ? '未提供' : 'Token', 'usage-unit')); session.appendChild(amount);
+    if (usage && usage.sessionCostUSD != null) session.appendChild(node('span', '$' + usage.sessionCostUSD.toFixed(2), 'usage-cost'));
+    if (usage) for (i = 0; i < (usage.windows || []).length; i++) {
+      w = usage.windows[i]; if (w.resetsAt <= now) continue;
+      label = w.windowMinutes === 300 ? '5 小时' : w.windowMinutes === 10080 ? '7 天' : w.windowMinutes ? w.windowMinutes / 60 + 'h' : '额度';
+      minutes = Math.max(1, Math.ceil((w.resetsAt - now) / 60000)); reset = minutes < 60 ? minutes + 'm' : minutes < 1440 ? Math.ceil(minutes / 60) + 'h' : Math.ceil(minutes / 1440) + 'd';
+      tile = node('div', null, 'quota-window' + (w.usedPercent >= 95 ? ' quota-danger' : w.usedPercent >= 80 ? ' quota-warning' : ''));
+      heading = node('div', null, 'quota-heading'); heading.appendChild(node('span', label, 'quota-label')); heading.appendChild(node('strong', Math.round(w.usedPercent) + '%', 'quota-percent')); tile.appendChild(heading);
+      track = node('div', null, 'quota-track'); fill = node('div', null, 'quota-fill'); fill.style.width = w.usedPercent + '%'; track.appendChild(fill); tile.appendChild(track);
+      tile.appendChild(node('span', (now - usage.updatedAt > 300000 ? '上次 · ' : '') + reset + ' 后重置', 'quota-reset')); quotas.appendChild(tile);
+    }
+    if (!quotas.children.length) quotas.appendChild(node('span', '周期额度未提供', 'quota-unavailable'));
+    box.appendChild(session); box.appendChild(quotas); return box;
+  };
   root.AgentDeckDisplayCards = function (cards, plugins) {
     plugins = plugins || [];
     var result = [], agents = [], tools = [], agentPlugin, i, j, c, name, status, found, overall;

@@ -39,8 +39,7 @@
           row = el('div', null, 'agent-state state-' + c.tools[j].status); identity = el('span', null, 'agent-identity');
           identity.appendChild(el('span', c.tools[j].name === 'pi' ? 'π' : c.tools[j].name.indexOf('Claude') === 0 ? '✳' : 'C', 'agent-icon'));
           identity.appendChild(el('span', c.tools[j].name)); row.appendChild(identity); row.appendChild(status(c.tools[j].status));
-          var usage = window.AgentDeckUsageLines(c.tools[j].usage), lines = el('div', null, 'agent-usage');
-          lines.appendChild(el('div', usage[0])); lines.appendChild(el('div', usage[1])); row.appendChild(lines); list.appendChild(row);
+          row.appendChild(window.AgentDeckUsageElement(c.tools[j].usage, document)); list.appendChild(row);
         }
         card.appendChild(list);
       } else {
@@ -66,7 +65,7 @@
     box.style.top = top + 'px';
     var width = box.clientWidth, available = Math.max(0, height - top - 38), count = box.children.length, cols = width >= 600 && count > 1 ? 2 : 1, rows = Math.ceil(count / cols) || 1;
     var landscapeAgents = width >= 600 && height <= 500 && count > 1 && box.children[0].className.indexOf('agent-overview') !== -1;
-    var gap = 12, portraitAgentHeight = cols === 1 && count > 1 && box.children[0].className.indexOf('agent-overview') !== -1 ? Math.min(available * 0.7, 68 + box.children[0].querySelectorAll('.agent-state').length * 82) : 0, w = Math.max(0, (width - gap * (cols - 1)) / cols), h = Math.max(0, (available - gap * (rows - 1)) / rows), i, j, card, list, more, visible;
+    var gap = 12, portraitAgentHeight = cols === 1 && count > 1 && box.children[0].className.indexOf('agent-overview') !== -1 ? Math.min(available * 0.7, 68 + box.children[0].querySelectorAll('.agent-state').length * 92) : 0, w = Math.max(0, (width - gap * (cols - 1)) / cols), h = Math.max(0, (available - gap * (rows - 1)) / rows), i, j, card, list, more, visible;
     for (i = 0; i < count; i++) {
       card = box.children[i]; card.style.left = (i % cols) * (w + gap) + 'px'; card.style.top = Math.floor(i / cols) * (h + gap) + 'px'; card.style.width = w + 'px'; card.style.height = h + 'px';
       if (portraitAgentHeight) {
@@ -80,6 +79,7 @@
         card.style.top = i === 0 ? '0px' : (i - 1) * (cellHeight + gap) + 'px';
         card.style.height = cellHeight + 'px';
       }
+      card.className = card.className.replace(/ compact-card/g, ''); if (parseFloat(card.style.height) < 110) card.className += ' compact-card';
       list = card.querySelector('.checklist'); more = card.querySelector('.list-more');
       if (list) {
         visible = Math.max(0, Math.floor((parseFloat(card.style.height) - list.offsetTop - 36) / 34));
