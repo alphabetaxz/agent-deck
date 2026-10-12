@@ -34,3 +34,8 @@
 @-webkit-keyframes deck-sparkle{0%,100%{opacity:1;box-shadow:0 0 2px #8fc8ff}50%{opacity:.65;box-shadow:0 0 10px #8fc8ff}}
 @keyframes deck-sparkle{0%,100%{opacity:1;box-shadow:0 0 2px #8fc8ff}50%{opacity:.65;box-shadow:0 0 10px #8fc8ff}}
 @media(prefers-reduced-motion:reduce){.status.running:before,#cards .status.running:before,.agent-state.state-running .agent-icon{-webkit-animation:none;animation:none}}
+/* Two compact usage lines under each agent; keep badges on the first line. */
+.agent-state{height:76px;line-height:28px;padding-bottom:4px}.agent-usage{font-size:10px;line-height:16px;color:#c0ccdb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.agent-usage>div{overflow:hidden;text-overflow:ellipsis}
+@media(max-height:500px){.agent-state{height:65px;line-height:26px;margin-bottom:3px}.agent-usage{font-size:9px;line-height:14px}.agent-overview .card-top{margin-bottom:5px}}
+
+.agent-state{padding-right:0}.agent-identity{padding-right:95px}

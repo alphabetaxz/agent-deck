@@ -42,3 +42,10 @@ test('pi preserves foreign or edited extensions when installation records are mi
   write(next.paths.pi,text);await assert.rejects(next.change('pi','install'),/已保留/);assert.equal(readFileSync(next.paths.pi,'utf8'),text);assert.equal(existsSync(next.manifestPath('pi')),false);
  }
 });
+test('Claude usage observer preserves, reinstalls and restores an existing statusline',async t=>{
+ const m=await fixture(t);const original={type:'command',command:'printf "custom status"',padding:2};write(m.paths.claude,JSON.stringify({statusLine:original}));
+ await m.change('claude','install');const installed=JSON.parse(readFileSync(m.paths.claude));assert.notEqual(installed.statusLine.command,original.command);assert.equal(installed.statusLine.padding,2);
+ await m.change('claude','install');assert.deepEqual(m.manifest('claude').originalStatusLine,original);assert.equal(m.status()[0].installed,true);
+ await m.change('claude','remove');assert.deepEqual(JSON.parse(readFileSync(m.paths.claude)).statusLine,original);
+ await m.change('claude','install');write(m.paths.claude,JSON.stringify({...JSON.parse(readFileSync(m.paths.claude)),statusLine:{type:'command',command:'new user status'}}));await m.change('claude','remove');assert.equal(JSON.parse(readFileSync(m.paths.claude)).statusLine.command,'new user status');
+});

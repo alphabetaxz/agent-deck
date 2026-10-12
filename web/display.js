@@ -38,7 +38,9 @@
         for (j = 0; j < c.tools.length; j++) {
           row = el('div', null, 'agent-state state-' + c.tools[j].status); identity = el('span', null, 'agent-identity');
           identity.appendChild(el('span', c.tools[j].name === 'pi' ? 'π' : c.tools[j].name.indexOf('Claude') === 0 ? '✳' : 'C', 'agent-icon'));
-          identity.appendChild(el('span', c.tools[j].name)); row.appendChild(identity); row.appendChild(status(c.tools[j].status)); list.appendChild(row);
+          identity.appendChild(el('span', c.tools[j].name)); row.appendChild(identity); row.appendChild(status(c.tools[j].status));
+          var usage = window.AgentDeckUsageLines(c.tools[j].usage), lines = el('div', null, 'agent-usage');
+          lines.appendChild(el('div', usage[0])); lines.appendChild(el('div', usage[1])); row.appendChild(lines); list.appendChild(row);
         }
         card.appendChild(list);
       } else {
@@ -64,9 +66,14 @@
     box.style.top = top + 'px';
     var width = box.clientWidth, available = Math.max(0, height - top - 38), count = box.children.length, cols = width >= 600 && count > 1 ? 2 : 1, rows = Math.ceil(count / cols) || 1;
     var landscapeAgents = width >= 600 && height <= 500 && count > 1 && box.children[0].className.indexOf('agent-overview') !== -1;
-    var gap = 12, w = Math.max(0, (width - gap * (cols - 1)) / cols), h = Math.max(0, (available - gap * (rows - 1)) / rows), i, j, card, list, more, visible;
+    var gap = 12, portraitAgentHeight = cols === 1 && count > 1 && box.children[0].className.indexOf('agent-overview') !== -1 ? Math.min(available * 0.7, 68 + box.children[0].querySelectorAll('.agent-state').length * 82) : 0, w = Math.max(0, (width - gap * (cols - 1)) / cols), h = Math.max(0, (available - gap * (rows - 1)) / rows), i, j, card, list, more, visible;
     for (i = 0; i < count; i++) {
       card = box.children[i]; card.style.left = (i % cols) * (w + gap) + 'px'; card.style.top = Math.floor(i / cols) * (h + gap) + 'px'; card.style.width = w + 'px'; card.style.height = h + 'px';
+      if (portraitAgentHeight) {
+        var otherHeight = Math.max(0, (available - portraitAgentHeight - gap * (count - 1)) / (count - 1));
+        card.style.top = i === 0 ? '0px' : portraitAgentHeight + gap + (i - 1) * (otherHeight + gap) + 'px';
+        card.style.height = (i === 0 ? portraitAgentHeight : otherHeight) + 'px';
+      }
       if (landscapeAgents) {
         var cellHeight = i === 0 ? available : Math.max(0, (available - gap * (count - 2)) / (count - 1));
         card.style.left = i === 0 ? '0px' : (w + gap) + 'px';

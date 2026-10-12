@@ -103,3 +103,13 @@ swift build
 CI 包内置 Node.js 24.5.0 和生产依赖，不包含构建机器路径或用户数据；数据保存在 `~/Library/Application Support/AgentDeck`。本地可用 `AGENT_DECK_NODE=/path/to/standalone/node zsh scripts/package-app.sh` 构建同样的包。需要官方独立 Node 安装中的 LICENSE；Homebrew 外部动态库依赖不会被带入安装包。
 
 当前为 ad-hoc 签名的预览构建，尚未配置 Developer ID 签名和 Apple 公证。GitHub Actions 不会自动发布 Release。
+
+### Agent 用量
+
+Agent 卡片在工作状态下方显示会话累计 Token（包含缓存读写）、工具提供的费用，以及周期额度的已用百分比和重置倒计时。多条正在工作的同类 Agent 会话合计显示；没有工作会话时显示最近会话。上下文占用和累计 Token 是不同指标。
+
+- **Codex**：从本地桌面会话的 `token_count` 记录读取累计 Token、上下文比例及周期额度；重启 App 后也能恢复最新用量。
+- **Claude Code**：一键接入会安装用量状态栏观察器，保留现有状态栏输出，移除接入时恢复原配置。主会话 Token 来自主会话记录（不含独立子 Agent 记录）；费用和额度来自 Claude 官方状态栏数据。超过 8 MiB 的记录不扫描，不显示不完整的 Token 总量。周期额度只在 Claude 提供该字段时显示，API/第三方网关账号可能不提供。
+- **pi**：使用公开扩展 API 统计当前 session 的全部记录（包含分支和压缩用量）。周期额度由模型供应商管理，扩展 API 未统一提供，显示“周期用量未提供”。
+
+额度来自最近一次工具上报，超过 5 分钟标为“上次额度”，超过重置时间隐藏；未提供的数据不显示成 0，也不根据 Token 数推算额度。用量采集不读取账号凭证、不请求私有计费 API。更新 Claude/pi 接入后，重新打开会话或在 pi 中重新加载扩展即可开始上报。

@@ -75,3 +75,5 @@ body[data-mode="display"]{background:#101722}.display-shell>header{padding:0 2px
 @media(prefers-reduced-motion:reduce){.status.running:before,#cards .status.running:before,.agent-state.state-running .agent-icon{-webkit-animation:none;animation:none}}
 
 button:disabled{cursor:not-allowed}button.is-loading:disabled{cursor:wait}
+.agent-state{flex-wrap:wrap;gap:3px 8px;padding:8px 11px}.agent-usage{flex-basis:100%;font-size:10px;line-height:15px;color:#c0ccdb;min-width:0}.agent-usage>div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.agent-states{gap:6px}
+@media(max-height:500px){.agent-state{padding:5px 9px;gap:1px 6px}.agent-usage{font-size:9px;line-height:14px}}

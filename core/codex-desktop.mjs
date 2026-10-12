@@ -1,3 +1,4 @@
+import {codexUsage} from '../integrations/usage.mjs';
 import {DatabaseSync} from 'node:sqlite';
 import {existsSync,readdirSync,openSync,closeSync,readSync,fstatSync,realpathSync} from 'node:fs';
 import {join,resolve,sep} from 'node:path';
@@ -13,7 +14,7 @@ export function desktopEvent(row,session,turnId){
   if(p.type==='turn_aborted')return {...base,hook_event_name:'Interrupt'};
   if(p.type==='error')return {...base,hook_event_name:'StopFailure',error:'桌面任务报告异常'};
   if(['exec_approval_request','apply_patch_approval_request','request_user_input'].includes(p.type))return {...base,hook_event_name:'PermissionRequest',message:'请在 Codex处理'};
-  if(p.type==='token_count')return {...base,hook_event_name:'Heartbeat'};
+  if(p.type==='token_count')return {...base,hook_event_name:'Heartbeat',usage:codexUsage(p)};
  }
  if(row.type==='response_item'){
   if(['function_call','custom_tool_call'].includes(p.type)){
@@ -70,7 +71,7 @@ export class CodexDesktopObserver {
      if(file.bytes.length>MAX_LINE){file.bytes=Buffer.alloc(0);file.discard=true;}
     }
     // Startup replay reduces historical records to the final state before publication.
-    if(start===0&&events.length){let lastLifecycle=-1;for(let i=0;i<events.length;i++)if(['UserPromptSubmit','Stop','Interrupt','StopFailure'].includes(events[i].hook_event_name))lastLifecycle=i;if(lastLifecycle>=0)events.splice(0,lastLifecycle);else events.length=0;}
+    if(start===0&&events.length){let lastLifecycle=-1;for(let i=0;i<events.length;i++)if(['UserPromptSubmit','Stop','Interrupt','StopFailure'].includes(events[i].hook_event_name))lastLifecycle=i;const latestUsage=events.findLast(e=>e.usage);if(lastLifecycle>=0)events.splice(0,lastLifecycle);else events.length=0;if(latestUsage&&!events.includes(latestUsage))events.push(latestUsage);}
     if(start===0&&events.length)events.unshift({...events[0],hook_event_name:'SessionStart'});
     for(const event of events){if(this.closed||!this.enabled)break;if(event.hook_event_name==='UserPromptSubmit')await this.onEvent({...event,hook_event_name:'SessionStart'});
      await this.onEvent(event);this.lastEventAt=Math.max(this.lastEventAt??0,event.timestamp);file.seen=true;}

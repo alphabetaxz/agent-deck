@@ -1,6 +1,7 @@
+import {normalizeUsage} from '../../integrations/usage.mjs';
 import { basename } from 'node:path';
 const sources=new Set(['claude','codex','pi']);
-const events=new Set(['SessionStart','SessionEnd','UserPromptSubmit','PreToolUse','PostToolUse','PostToolUseFailure','PermissionRequest','Notification','Stop','StopFailure','Heartbeat','Interrupt','SubagentStart','SubagentStop']);
+const events=new Set(['SessionStart','SessionEnd','UserPromptSubmit','PreToolUse','PostToolUse','PostToolUseFailure','PermissionRequest','Notification','Stop','StopFailure','Heartbeat','Interrupt','SubagentStart','SubagentStop','Usage']);
 const active=s=>Object.keys(s.tools??{}).length>0||Object.keys(s.subagents??{}).length>0;
 export function resetRestoredSessions(sessions){for(const s of Object.values(sessions)){s.lastSeen=0;s.tools={};s.subagents={};s.mainStopped=false;}}
 const clip=v=>typeof v==='string'?v.slice(0,500):'';
@@ -9,7 +10,7 @@ export function applyEvent(sessions, event, now=Date.now()) {
   const key=`${event.source}:${event.session_id}`;
   let s=sessions[key]; const name=event.hook_event_name;
   const at=Number.isFinite(event.timestamp)?Math.min(event.timestamp,now):now;
-  if (s && at<s.updatedAt) return false;
+  if (s && at<s.updatedAt && name!=='Usage' && !(name==='Heartbeat'&&event.usage)) return false;
   if (s?.ended && name!=='SessionStart') return false;
   if (name==='Heartbeat' && !s) return false;
   if (!s) {
@@ -20,7 +21,10 @@ export function applyEvent(sessions, event, now=Date.now()) {
   if (event.turn_id && s.turnId && event.turn_id!==s.turnId && !['SessionStart','UserPromptSubmit'].includes(name)) return false;
   const seen=Number.isFinite(event.observed_at)?Math.min(event.observed_at,now):now;
   if(event.client==='desktop')s.client='desktop';
-  if (name==='Heartbeat') { s.lastSeen=seen; return false; }
+  let usageChanged=false;
+  if(event.usage && (!s.usage || at>=s.usage.updatedAt)){const value=normalizeUsage(event.usage,at);if(value){s.usage=value;usageChanged=true;}}
+  if(name==='Usage'){return usageChanged;}
+  if (name==='Heartbeat') { s.lastSeen=Math.max(s.lastSeen,seen); return usageChanged; }
   if (event.source==='claude') {
     s.tools??={};s.subagents??={};
     const tool=event.tool_use_id?'tool:'+clip(event.tool_use_id):'',agent=event.agent_id?'agent:'+clip(event.agent_id):'';
@@ -50,6 +54,6 @@ export function agentCards(sessions,now=Date.now()) {
   return Object.values(sessions).filter(s=>!s.ended).sort((a,b)=>(b.status==='waiting')-(a.status==='waiting')||b.updatedAt-a.updatedAt).map(s=> {
     // Without a process monitor, quiet Claude/Codex sessions have uncertain liveness.
     const stale=!(s.source==='claude'&&s.lastSeen>0&&active(s))&&now-s.lastSeen>(s.source==='pi'?45000:300000);
-    return {id:s.id,type:'status',title:s.title,subtitle:s.client==='desktop'?'Codex':s.source==='claude'?'Claude Code':s.source==='codex'?'Codex':'pi',status:stale?'unknown':s.status,summary:stale?'暂未收到新事件；存活状态待确认':s.summary,updatedAt:s.updatedAt};
+    return {id:s.id,type:'status',title:s.title,subtitle:s.client==='desktop'?'Codex':s.source==='claude'?'Claude Code':s.source==='codex'?'Codex':'pi',status:stale?'unknown':s.status,summary:stale?'暂未收到新事件；存活状态待确认':s.summary,updatedAt:s.updatedAt,...(s.usage?{usage:s.usage}:{})};
   });
 }

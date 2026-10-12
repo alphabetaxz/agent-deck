@@ -66,3 +66,9 @@ test('prefixed fullscreen supports entry and exit, wake lock failures show feedb
  w.document.getElementById('wake').click();assert.equal(released,1);assert.equal(w.document.getElementById('wake').textContent,'保持亮屏');
  dom.window.close();
 });
+test('usage preserves ES5 compatibility, expires old windows and shows missing data honestly',()=>{
+ const dom=new JSDOM('',{runScripts:'outside-only'});dom.window.eval(source('display-shared.js'));const format=dom.window.AgentDeckUsageLines;
+ const u={sessionTokens:150000,sessionCostUSD:0,updatedAt:100,windows:[{id:'primary',usedPercent:42,windowMinutes:300,resetsAt:3600100}]};
+ assert.match(format(u,100)[0],/150.0k Token · \$0.00/);assert.match(format(u,100)[1],/5h 42%/);
+ assert.equal(format(u,4000000)[1],'上次额度 周期用量未提供');assert.equal(format(null,100)[0],'会话 未提供');dom.window.close();
+});

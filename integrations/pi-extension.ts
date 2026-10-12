@@ -9,13 +9,23 @@ export default function (pi: ExtensionAPI) {
   let timer: ReturnType<typeof setInterval> | undefined;
   let latest = '';
   let turnId = '';
+  const usage = (ctx: any) => {
+    let sessionTokens=0,sessionCostUSD=0;
+    for(const entry of ctx.sessionManager.getEntries()){
+      const u=entry.type==='message'?entry.message.usage:entry.usage;
+      if(!u)continue;
+      sessionTokens+=u.totalTokens??((u.input??0)+(u.output??0)+(u.cacheRead??0)+(u.cacheWrite??0));
+      sessionCostUSD+=u.cost?.total??0;
+    }
+    return {sessionTokens,sessionCostUSD,contextPercent:ctx.getContextUsage()?.percent,windows:[]};
+  };
   const send = async (event: string, ctx: any, extra: Record<string, unknown> = {}) => {
     try {
       const data = INSTALLED_DATA_DIR ?? process.env.AGENT_DECK_DATA ?? join(homedir(), 'Library/Application Support/AgentDeck');
       const runtime = JSON.parse(readFileSync(join(data, 'runtime.json'), 'utf8'));
       const url = new URL(runtime.hookURL);
       if (!['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) return;
-      await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + runtime.hookToken }, body: JSON.stringify({source:'pi',session_id:ctx.sessionManager.getSessionId(),cwd:ctx.cwd,hook_event_name:event,timestamp:Date.now(),turn_id:turnId||undefined,...extra}), signal: AbortSignal.timeout(800) });
+      await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + runtime.hookToken }, body: JSON.stringify({source:'pi',session_id:ctx.sessionManager.getSessionId(),cwd:ctx.cwd,hook_event_name:event,timestamp:Date.now(),turn_id:turnId||undefined,usage:usage(ctx),...extra}), signal: AbortSignal.timeout(800) });
     } catch { /* Never interfere with agent execution. */ }
   };
   const clear = () => { if (timer) clearInterval(timer); timer = undefined; };

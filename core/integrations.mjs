@@ -125,6 +125,7 @@ export class IntegrationManager {
             const config=objectJSON(read(this.paths[source]),'Agent 配置');
             installed=events[source].every(event=>(config.hooks?.[event]??[]).some(g=>g.hooks?.some(h=>h.command===manifest.command)));
             installed=installed&&hash(read(join(this.directory,'hook.mjs')))===manifest.helperHash;
+            if(source==='claude')installed=installed&&config.statusLine?.command===manifest.statusLineCommand&&!!manifest.statusLineCommand&&hash(read(join(this.directory,'claude-statusline.mjs')))===manifest.statusLineHash&&hash(read(join(this.directory,'usage.mjs')))===manifest.usageHash;
             if(source==='codex') {
               const toml=read(this.codexConfig)??'';
               if(/^\s*(hooks|codex_hooks)\s*=\s*false\s*(?:#.*)?$/m.test(toml))installed=false;
@@ -185,7 +186,21 @@ export class IntegrationManager {
         }else {
           const helperPath=join(this.directory,'hook.mjs');const helper=readFileSync(join(this.root,'integrations/hook.mjs'),'utf8');
           const command=[process.execPath,helperPath,source,'--data',this.dataDir].map(quote).join(' ');
-          add(target,mergeHooks(current,manifest.command?[manifest.command]:[],command,source),'hooks.json');
+          let updated=mergeHooks(current,manifest.command?[manifest.command]:[],command,source);
+          if(source==='claude'){
+            const settings=JSON.parse(updated);
+            const owned=!!manifest.statusLineCommand&&settings.statusLine?.command===manifest.statusLineCommand;
+            const original=owned?manifest.originalStatusLine:settings.statusLine;
+            if(original!=null&&(!original||original.type!=='command'||typeof original.command!=='string'))throw new Error('当前 Claude 状态栏类型不支持，已保留原配置');
+            const statusLinePath=join(this.directory,'claude-statusline.mjs');
+            next.statusLineCommand=[process.execPath,statusLinePath].map(quote).join(' ');
+            next.originalStatusLine=original??null;
+            settings.statusLine={...(original??{}),type:'command',command:next.statusLineCommand};
+            updated=JSON.stringify(settings,null,2)+'\n';
+            for(const file of ['claude-statusline.mjs','usage.mjs']){const text=readFileSync(join(this.root,'integrations',file),'utf8');add(join(this.directory,file),text,file);next[file==='usage.mjs'?'usageHash':'statusLineHash']=hash(text);}
+            add(join(this.directory,'claude-statusline-config.json'),JSON.stringify({original:next.originalStatusLine,dataDir:this.dataDir},null,2)+'\n','claude-statusline-config.json');
+          }
+          add(target,updated,'hooks.json');
           add(helperPath,helper,'hook.mjs');next.command=command;next.helperHash=hash(helper);
           if(source==='codex') {
             const previous=read(this.codexConfig);const patch=enableFeature(previous,tool.featureKey??'hooks');
@@ -200,7 +215,10 @@ export class IntegrationManager {
           if(current!==null&&hash(current)!==manifest.extensionHash)throw new Error('pi 扩展已被修改，已保留原文件');
           if(current!==null)add(target,null,'pi-extension.ts');
         }else {
-          if(current!==null)add(target,mergeHooks(current,[manifest.command],null,source),'hooks.json');
+          if(current!==null){let updated=mergeHooks(current,[manifest.command],null,source);
+            if(source==='claude'&&manifest.statusLineCommand){const settings=JSON.parse(updated);if(settings.statusLine?.command===manifest.statusLineCommand){if(manifest.originalStatusLine)settings.statusLine=manifest.originalStatusLine;else delete settings.statusLine;}updated=JSON.stringify(settings,null,2)+'\n';}
+            add(target,updated,'hooks.json');
+          }
           if(source==='codex'){const existing=read(this.codexConfig);if(existing!==null)add(this.codexConfig,restoreFeature(existing,manifest.featurePatch),'config.toml');}
         }
         add(this.manifestPath(source),JSON.stringify({...manifest,installed:false},null,2)+'\n','integration.json');this.observed.delete(source);

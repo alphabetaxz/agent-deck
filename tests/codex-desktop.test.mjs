@@ -29,3 +29,8 @@ test('asynchronous questions do not falsely report blocking approval; explicit i
 test('late completion of an older turn does not stop following the current turn',async t=>{
  const {observer,add,sessions}=await fixture(t);const path=add('turns','Codex Desktop','vscode',line('event_msg',{type:'task_started',turn_id:'one'}));await observer.change('install');appendFileSync(path,line('event_msg',{type:'task_started',turn_id:'two'})+line('event_msg',{type:'task_complete',turn_id:'one'})+line('response_item',{type:'function_call',name:'read'}));await observer.tick();assert.equal(agentCards(sessions)[0].status,'running');appendFileSync(path,line('event_msg',{type:'task_complete',turn_id:'two'}));await observer.tick();assert.equal(agentCards(sessions)[0].status,'completed');
 });
+test('usage replay survives completion and token updates do not change lifecycle status',async t=>{
+ const {observer,add,sessions}=await fixture(t);const usage={type:'token_count',info:{total_token_usage:{total_tokens:1234}},rate_limits:{primary:{used_percent:30,resets_at:Math.floor(Date.now()/1000)+3600,window_minutes:300}}};const path=add('usage','Codex Desktop','vscode',line('event_msg',{type:'task_started',turn_id:'u'},Date.now()-2000)+line('event_msg',usage,Date.now()-1000)+line('event_msg',{type:'task_complete',turn_id:'u'}));
+ await observer.change('install');assert.equal(agentCards(sessions)[0].status,'completed');assert.equal(agentCards(sessions)[0].usage.sessionTokens,1234);
+ appendFileSync(path,line('event_msg',{...usage,info:{total_token_usage:{total_tokens:2345}}}));await observer.tick();assert.equal(agentCards(sessions)[0].status,'completed');assert.equal(agentCards(sessions)[0].usage.sessionTokens,2345);
+});
